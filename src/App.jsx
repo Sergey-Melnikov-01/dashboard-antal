@@ -55,9 +55,14 @@ export default function App() {
 
   const branches = [...new Set(allData.map(r => r["Ветка"]).filter(Boolean))];
   const contractors = [...new Set(allData.map(r => r["Подрядчик"]).filter(Boolean))];
+  
+  // ИЗМЕНЕНИЕ: участки теперь фильтруются и по подрядчику
   const sections = [...new Set(
     allData
-      .filter(r => selectedBranch === 'Все' || r["Ветка"] === selectedBranch)
+      .filter(r => 
+        (selectedBranch === 'Все' || r["Ветка"] === selectedBranch) &&
+        (selectedContractor === 'Все' || r["Подрядчик"] === selectedContractor)
+      )
       .map(r => r["Участок"]).filter(Boolean)
   )];
 
@@ -163,7 +168,8 @@ export default function App() {
               <option value="Все">Все ветки</option>
               {branches.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
-            <select style={sel} value={selectedContractor} onChange={e => setSelectedContractor(e.target.value)}>
+            {/* ИЗМЕНЕНИЕ: при смене подрядчика сбрасываем участок */}
+            <select style={sel} value={selectedContractor} onChange={e => { setSelectedContractor(e.target.value); setSelectedSection('Все'); }}>
               <option value="Все">Все подрядчики</option>
               {contractors.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
