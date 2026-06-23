@@ -47,7 +47,7 @@ export default function App() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: bg, color: 'white', fontFamily: 'sans-serif' }}>
-      Загрузка аналитики...
+      Загрузка аналитики АНТАЛ...
     </div>
   );
 
