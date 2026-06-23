@@ -1,33 +1,114 @@
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+.tabs-container {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
 }
 
-html, body, #root {
-  width: 100%;
-  min-height: 100vh;
-  background: #08110d;
-  overflow-x: hidden;
+.bubbly-button {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  padding: 14px 28px;
+  background-color: #16251e;
+  color: #6b7280;
+  border-radius: 8px;
+  border: 1px solid #1d2d24;
+  cursor: pointer;
+  position: relative;
+  transition: transform ease-in 0.1s, background-color 0.3s, color 0.3s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: bold;
+  z-index: 1;
 }
 
+.bubbly-button:hover {
+  border-color: #2de2a6;
+}
+
+/* Активная вкладка */
+.bubbly-button.active {
+  background-color: #2de2a6;
+  color: #08110d;
+  border-color: #2de2a6;
+}
+
+/* --- ЭФФЕКТ ПУЗЫРЬКОВ --- */
+.bubbly-button:before,
+.bubbly-button:after {
+  position: absolute;
+  content: '';
+  display: block;
+  width: 140%;
+  height: 100%;
+  left: -20%;
+  z-index: -1;
+  background-repeat: no-repeat;
+  transition: all ease-in-out 0.5s;
+}
+
+.bubbly-button:before {
+  display: none;
+  top: -75%;
+  background-image:
+    radial-gradient(circle, #2de2a6 20%, transparent 20%),
+    radial-gradient(circle, transparent 20%, #2de2a6 20%, transparent 30%),
+    radial-gradient(circle, #2de2a6 20%, transparent 20%),
+    radial-gradient(circle, #2de2a6 20%, transparent 20%),
+    radial-gradient(circle, transparent 10%, #2de2a6 15%, transparent 20%),
+    radial-gradient(circle, #2de2a6 20%, transparent 20%),
+    radial-gradient(circle, #2de2a6 20%, transparent 20%),
+    radial-gradient(circle, #2de2a6 20%, transparent 20%),
+    radial-gradient(circle, #2de2a6 20%, transparent 20%);
+  background-size: 10% 10%, 20% 20%, 15% 15%, 20% 20%, 18% 18%, 10% 10%, 15% 15%, 10% 10%, 18% 18%;
+}
+
+.bubbly-button:after {
+  display: none;
+  bottom: -75%;
+  background-image:
+    radial-gradient(circle, #2de2a6 20%, transparent 20%),
+    radial-gradient(circle, #2de2a6 20%, transparent 20%),
+    radial-gradient(circle, transparent 10%, #2de2a6 15%, transparent 20%),
+    radial-gradient(circle, #2de2a6 20%, transparent 20%),
+    radial-gradient(circle, #2de2a6 20%, transparent 20%),
+    radial-gradient(circle, #2de2a6 20%, transparent 20%),
+    radial-gradient(circle, #2de2a6 20%, transparent 20%);
+  background-size: 15% 15%, 20% 20%, 18% 18%, 20% 20%, 15% 15%, 10% 10%, 20% 20%;
+}
+
+/* При нажатии чуть уменьшаем */
+.bubbly-button:active {
+  transform: scale(0.92);
+}
+
+/* Включаем анимацию */
+.bubbly-button.animate:before {
+  display: block;
+  animation: topBubbles 0.75s forwards;
+}
+
+.bubbly-button.animate:after {
+  display: block;
+  animation: bottomBubbles 0.75s forwards;
+}
+
+@keyframes topBubbles {
+  0%   { background-position: 5% 90%, 10% 90%, 10% 90%, 15% 90%, 25% 90%, 25% 90%, 40% 90%, 55% 90%, 70% 90%; }
+  50%  { background-position: 0% 80%, 0% 20%, 10% 40%, 20% 0%, 30% 30%, 22% 50%, 50% 50%, 65% 20%, 90% 30%; }
+  100% { background-position: 0% 70%, 0% 10%, 10% 30%, 20% -10%, 30% 20%, 22% 40%, 50% 40%, 65% 10%, 90% 20%; background-size: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%; }
+}
+
+@keyframes bottomBubbles {
+  0%   { background-position: 10% -10%, 30% 10%, 55% -10%, 70% -10%, 85% -10%, 70% -10%, 70% 0%; }
+  50%  { background-position: 0% 80%, 20% 80%, 45% 60%, 60% 100%, 75% 70%, 95% 60%, 105% 0%; }
+  100% { background-position: 0% 90%, 20% 90%, 45% 70%, 60% 110%, 75% 80%, 95% 70%, 110% 10%; background-size: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%; }
+}
+
+/* Общие стили для body */
 body {
-  margin: 0;
-  padding: 0;
   background: #08110d;
-}
-
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #0f1b15;
-}
-::-webkit-scrollbar-thumb {
-  background: #1d2d24;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #2de2a6;
+  color: #f3f4f6;
+  font-family: 'Inter', sans-serif;
+  margin: 0;
 }

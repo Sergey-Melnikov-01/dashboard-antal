@@ -7,43 +7,57 @@ import {
 
 const API_URL = "https://script.google.com/macros/s/AKfycbw6XLjGzrrzg4knwf9QQ62zgv5jnKxvzZnZKhLUTSFX14b2dqa_iJZn2y5GjzPBgkH3/exec";
 
-const bg = '#08110d';
-const card = {
-  background: '#0f1b15', border: '1px solid #1d2d24',
-  borderRadius: '12px', padding: '20px',
-  display: 'flex', flexDirection: 'column'
+const bg = '#1c1d26';
+const card = { background: '#21222d', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '18px', padding: '22px', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' };
+const lbl = { color: '#94a3b8', fontSize: '11px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.8px' };
+
+const parseDate = s => {
+  if (!s) return new Date();
+  const [d, m, y] = String(s).split('.');
+  return new Date(y, m - 1, d);
 };
-const lbl = { color: '#6b7280', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' };
-const parseDate = s => { if (!s) return new Date(); const [d, m, y] = String(s).split('.'); return new Date(y, m - 1, d); };
+
+const formatMoney = v => {
+  if (Math.abs(v) >= 1e9) return (v / 1e9).toFixed(2) + ' млрд ₸';
+  if (Math.abs(v) >= 1e6) return (v / 1e6).toFixed(1) + ' млн ₸';
+  return v.toLocaleString('ru') + ' ₸';
+};
 
 export default function App() {
   const [allData, setAllData] = useState([]);
-  const [tmcData, setTmcData] = useState([]);
-  const [changesData, setChangesData] = useState([]);
-  const [datesData, setDatesData] = useState([]);
-  const [pirData, setPirData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('construction');
-
+  const [animatingTab, setAnimatingTab] = useState(null);
   const [selectedBranch, setSelectedBranch] = useState('Все');
   const [selectedContractor, setSelectedContractor] = useState('Все');
   const [selectedSection, setSelectedSection] = useState('Все');
   const [selectedDate, setSelectedDate] = useState('');
+  const [openDropdown, setOpenDropdown] = useState(null);
+
+  const tabs = [
+    { id: 'construction', label: '🏗️ СМР' },
+    { id: 'pir', label: '📋 ПИР/ПСД' },
+    { id: 'materials', label: '📦 ТМЦ' },
+    { id: 'schedule', label: '⏱️ Сроки' },
+    { id: 'changes', label: '📊 Изменения' }
+  ];
+
+  const handleTabClick = (id) => {
+    setActiveTab(id);
+    setAnimatingTab(id);
+    setTimeout(() => setAnimatingTab(null), 700);
+  };
 
   useEffect(() => {
     axios.get(API_URL).then(res => {
       const raw = res.data;
       setAllData(Array.isArray(raw?.DB_SMR) ? raw.DB_SMR : []);
-      setTmcData(Array.isArray(raw?.DB_TMC) ? raw.DB_TMC : []);
-      setChangesData(Array.isArray(raw?.DB_CHANGES) ? raw.DB_CHANGES : []);
-      setDatesData(Array.isArray(raw?.DB_DATES) ? raw.DB_DATES : []);
-      setPirData(Array.isArray(raw?.DB_PIR) ? raw.DB_PIR : []);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: bg, color: 'white', fontFamily: 'sans-serif' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1c1d26', color: 'white', fontFamily: 'sans-serif' }}>
       Загрузка аналитики АНТАЛ...
     </div>
   );
@@ -55,14 +69,9 @@ export default function App() {
 
   const branches = [...new Set(allData.map(r => r["Ветка"]).filter(Boolean))];
   const contractors = [...new Set(allData.map(r => r["Подрядчик"]).filter(Boolean))];
-  
-  // ИЗМЕНЕНИЕ: участки теперь фильтруются и по подрядчику
   const sections = [...new Set(
     allData
-      .filter(r => 
-        (selectedBranch === 'Все' || r["Ветка"] === selectedBranch) &&
-        (selectedContractor === 'Все' || r["Подрядчик"] === selectedContractor)
-      )
+      .filter(r => (selectedBranch === 'Все' || r["Ветка"] === selectedBranch) && (selectedContractor === 'Все' || r["Подрядчик"] === selectedContractor))
       .map(r => r["Участок"]).filter(Boolean)
   )];
 
@@ -73,6 +82,7 @@ export default function App() {
     (selectedSection === 'Все' || r["Участок"] === selectedSection)
   );
 
+  // --- KPI ---
   const totalFact = filtered.reduce((s, r) => s + (Number(r["Факт км"]) || 0), 0);
   const totalPlan = filtered.reduce((s, r) => s + (Number(r["План км"]) || 0), 0);
   const deviation = totalFact - totalPlan;
@@ -83,6 +93,12 @@ export default function App() {
   const budgetDev = budgetFact - budgetPlan;
   const budgetPct = budgetPlan > 0 ? ((budgetFact / budgetPlan) * 100).toFixed(1) : 0;
 
+  const materialPlan = filtered.reduce((s, r) => s + (Number(r["Стоим. матер. [План]"]) || 0), 0);
+  const materialFact = filtered.reduce((s, r) => s + (Number(r["Стоим. матер. [Факт]"]) || 0), 0);
+  const materialDev = materialFact - materialPlan;
+  const materialPct = materialPlan > 0 ? ((materialFact / materialPlan) * 100).toFixed(1) : 0;
+
+  // --- Charts data ---
   const trendData = dates.map(date => {
     const rows = allData.filter(r =>
       r["Дата отчета"] === date &&
@@ -102,87 +118,175 @@ export default function App() {
     return { name: c, fact: f, plan: p, pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 };
   }).filter(c => c.fact > 0 || c.plan > 0);
 
-  const tmcDates = [...new Set(tmcData.map(r => r["Дата отчета"]).filter(Boolean))]
-    .sort((a, b) => parseDate(a) - parseDate(b));
-  const latestTmcDate = tmcDates[tmcDates.length - 1];
-  const filteredTmc = tmcData.filter(r => r["Дата отчета"] === latestTmcDate);
-  const tmcDeficit = filteredTmc.filter(r => (Number(r["Дефицит(-)/Запас(+)"]) || 0) < 0).length;
+  const toggleDropdown = (name) => setOpenDropdown(prev => prev === name ? null : name);
 
-  const datesDates = [...new Set(datesData.map(r => r["Дата отчета"]).filter(Boolean))]
-    .sort((a, b) => parseDate(a) - parseDate(b));
-  const latestDatesDate = datesDates[datesDates.length - 1];
-  const filteredDates = datesData.filter(r => r["Дата отчета"] === latestDatesDate);
-  const overdueCount = filteredDates.filter(r => (Number(r["Отклонение (дней)"]) || 0) > 0).length;
-
-  const changesDates = [...new Set(changesData.map(r => r["Дата отчета"]).filter(Boolean))]
-    .sort((a, b) => parseDate(a) - parseDate(b));
-  const latestChangesDate = changesDates[changesDates.length - 1];
-  const filteredChanges = changesData.filter(r => r["Дата отчета"] === latestChangesDate);
-  const changesVolumePlan = filteredChanges.reduce((s, r) => s + (Number(r["Объём [План]"]) || 0), 0);
-  const changesVolumeFact = filteredChanges.reduce((s, r) => s + (Number(r["Объём [Факт]"]) || 0), 0);
-  const changesVolumeDev = changesVolumeFact - changesVolumePlan;
-
-  const sel = {
-    background: '#16251e', color: 'white', border: '1px solid #1d2d24',
-    borderRadius: '6px', padding: '8px 12px', fontSize: '13px', outline: 'none', cursor: 'pointer'
-  };
-
-  const tabBtn = (id) => ({
-    padding: '10px 20px', cursor: 'pointer', border: 'none',
-    borderBottom: activeTab === id ? '2px solid #2de2a6' : '2px solid transparent',
-    background: 'none', color: activeTab === id ? '#2de2a6' : '#6b7280',
-    fontSize: '14px', fontWeight: 'bold', transition: '0.3s',
-    display: 'flex', alignItems: 'center', gap: '8px'
-  });
-
-  const formatMoney = v => {
-    if (v >= 1e9) return (v / 1e9).toFixed(2) + ' млрд';
-    if (v >= 1e6) return (v / 1e6).toFixed(1) + ' млн';
-    return v.toLocaleString('ru');
+  const PushDropdown = ({ name, label, value, options, onChange, onReset }) => {
+    const isOpen = openDropdown === name;
+    return (
+      <div style={{ position: 'relative' }}>
+        <style>{`
+          .push-btn {
+            border-radius: 10px;
+            border: 2px outset #2de2a640;
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            color: #eee;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            overflow: hidden;
+            box-shadow: 0 0 8px rgba(0,0,0,0.8);
+            font-family: verdana, sans-serif;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            background: linear-gradient(160deg, #2a2b38, #21222d);
+            text-shadow: 0px 0px 2px rgba(0,0,0,.5);
+            transition: 0.2s;
+            white-space: nowrap;
+            user-select: none;
+          }
+          .push-btn.active-filter {
+            border-color: #2de2a6;
+            color: #2de2a6;
+            box-shadow: 0 0 8px #2de2a640, 0 0 20px #2de2a620;
+          }
+          .push-btn:active, .push-btn.open {
+            border: 2px outset #2de2a6;
+            color: #fff;
+            background: linear-gradient(160deg, #2e3048, #21222d);
+            text-shadow: 0px 0px 4px #2de2a6;
+            box-shadow: 0 0 10px #2de2a6, 0 0 30px #2de2a640;
+          }
+          .push-btn span { position: absolute; display: block; }
+          .push-btn span:nth-child(1) { top: 0; left: -100%; width: 100%; height: 1px; background: linear-gradient(90deg, transparent, #2de2a6); }
+          .push-btn.open span:nth-child(1) { left: 100%; transition: 0.8s; }
+          .push-btn span:nth-child(2) { top: -100%; right: 0; width: 1px; height: 100%; background: linear-gradient(180deg, transparent, #2de2a6); }
+          .push-btn.open span:nth-child(2) { top: 100%; transition: 0.8s; transition-delay: 0.2s; }
+          .push-btn span:nth-child(3) { bottom: 0; right: -100%; width: 100%; height: 1px; background: linear-gradient(270deg, transparent, #2de2a6); }
+          .push-btn.open span:nth-child(3) { right: 100%; transition: 0.8s; transition-delay: 0.4s; }
+          .push-btn span:nth-child(4) { bottom: -100%; left: 0; width: 1px; height: 100%; background: linear-gradient(360deg, transparent, #2de2a6); }
+          .push-btn.open span:nth-child(4) { bottom: 100%; transition: 0.8s; transition-delay: 0.6s; }
+          .push-dropdown-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            z-index: 999;
+            background: #21222d;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            min-width: 180px;
+            max-height: 260px;
+            overflow-y: auto;
+            box-shadow: 0 0 20px rgba(45,226,166,0.15);
+            padding: 4px 0;
+          }
+          .push-dropdown-item {
+            padding: 9px 16px;
+            font-size: 12px;
+            color: #9ca3af;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+            letter-spacing: 0.5px;
+          }
+          .push-dropdown-item:hover { background: rgba(255,255,255,0.05); color: #2de2a6; }
+          .push-dropdown-item.selected { color: #2de2a6; font-weight: bold; }
+        `}</style>
+        <button
+          className={`push-btn ${isOpen ? 'open' : ''} ${(value && value !== 'Все') ? 'active-filter' : ''}`}
+          onClick={() => toggleDropdown(name)}
+        >
+          <span></span><span></span><span></span><span></span>
+          {label}: {value || 'Все'}
+          <span style={{ position: 'static', marginLeft: '4px', fontSize: '9px' }}>{isOpen ? '▲' : '▼'}</span>
+        </button>
+        {isOpen && (
+          <div className="push-dropdown-menu">
+            <div
+              className={`push-dropdown-item ${!value || value === 'Все' || value === '' ? 'selected' : ''}`}
+              onClick={() => { onChange(onReset || 'Все'); setOpenDropdown(null); }}
+            >
+              {`Все ${label.toLowerCase()}`}
+            </div>
+            {options.map(opt => (
+              <div
+                key={opt}
+                className={`push-dropdown-item ${value === opt ? 'selected' : ''}`}
+                onClick={() => { onChange(opt); setOpenDropdown(null); }}
+              >
+                {opt}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, color: '#f3f4f6', padding: '30px', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: bg, color: '#e2e8f0', padding: '30px 36px', fontFamily: 'Inter, sans-serif' }}>
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
         <h1 style={{ fontSize: '22px', fontWeight: '800', margin: 0 }}>
           DASHBOARD <span style={{ color: '#2de2a6' }}>ANTAL</span>
         </h1>
-        <div style={{ color: '#6b7280', fontSize: '12px', textAlign: 'right' }}>
+        <div style={{ color: '#94a3b8', fontSize: '12px', textAlign: 'right' }}>
           ДАННЫЕ ОБНОВЛЕНЫ:<br />
           <span style={{ color: 'white', fontWeight: 'bold' }}>{activeDate}</span>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '5px', borderBottom: '1px solid #1d2d24', marginBottom: '24px', flexWrap: 'wrap' }}>
-        <button style={tabBtn('construction')} onClick={() => setActiveTab('construction')}>🏗️ СМР</button>
-        <button style={tabBtn('pir')} onClick={() => setActiveTab('pir')}>📋 ПИР/ПСД</button>
-        <button style={tabBtn('materials')} onClick={() => setActiveTab('materials')}>📦 ТМЦ</button>
-        <button style={tabBtn('schedule')} onClick={() => setActiveTab('schedule')}>⏱️ Сроки</button>
-        <button style={tabBtn('changes')} onClick={() => setActiveTab('changes')}>📊 Изменения</button>
+      {/* Tabs */}
+      <div className="tabs-container" style={{ marginBottom: '24px' }}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            className={`bubbly-button ${activeTab === tab.id ? 'active' : ''} ${animatingTab === tab.id ? 'animate' : ''}`}
+            onClick={() => handleTabClick(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {activeTab === 'construction' && (
         <>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '24px' }}>
-            <select style={sel} value={selectedBranch} onChange={e => { setSelectedBranch(e.target.value); setSelectedSection('Все'); }}>
-              <option value="Все">Все ветки</option>
-              {branches.map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
-            {/* ИЗМЕНЕНИЕ: при смене подрядчика сбрасываем участок */}
-            <select style={sel} value={selectedContractor} onChange={e => { setSelectedContractor(e.target.value); setSelectedSection('Все'); }}>
-              <option value="Все">Все подрядчики</option>
-              {contractors.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select style={sel} value={selectedSection} onChange={e => setSelectedSection(e.target.value)}>
-              <option value="Все">Все участки</option>
-              {sections.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select style={sel} value={selectedDate} onChange={e => setSelectedDate(e.target.value)}>
-              <option value="">Последняя дата</option>
-              {dates.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
+          {/* Filters */}
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px', alignItems: 'flex-start' }} onClick={e => { if (e.target === e.currentTarget) setOpenDropdown(null); }}>
+            <PushDropdown
+              name="branch"
+              label="Ветка"
+              value={selectedBranch}
+              options={branches}
+              onChange={v => { setSelectedBranch(v); setSelectedSection('Все'); }}
+            />
+            <PushDropdown
+              name="contractor"
+              label="Подрядчик"
+              value={selectedContractor}
+              options={contractors}
+              onChange={v => { setSelectedContractor(v); setSelectedSection('Все'); }}
+            />
+            <PushDropdown
+              name="section"
+              label="Участок"
+              value={selectedSection}
+              options={sections}
+              onChange={v => setSelectedSection(v)}
+            />
+            <PushDropdown
+              name="date"
+              label="Дата"
+              value={selectedDate}
+              options={dates}
+              onChange={v => setSelectedDate(v === 'Все' ? '' : v)}
+              onReset=""
+            />
           </div>
 
+          {/* KPI Row 1 — Объёмы */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '16px' }}>
             {[
               { label: 'План общий', val: totalPlan.toFixed(1), unit: 'км', color: '#2898ff' },
@@ -199,22 +303,74 @@ export default function App() {
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
+          {/* KPI Row 2 — Бюджет СМР */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '16px' }}>
             {[
-              { label: 'Бюджет план', val: formatMoney(budgetPlan), color: '#2898ff' },
-              { label: 'Бюджет факт', val: formatMoney(budgetFact), color: '#2de2a6' },
-              { label: 'Отклонение бюджета', val: (budgetDev > 0 ? '+' : '') + formatMoney(budgetDev), color: budgetDev >= 0 ? '#2de2a6' : '#ff4d4d' },
-              { label: 'Выполнение бюджета', val: budgetPct, unit: '%', color: '#ff9b45' },
+              { label: 'Бюджет СМР План', val: formatMoney(budgetPlan), color: '#2898ff' },
+              { label: 'Бюджет СМР Факт', val: formatMoney(budgetFact), color: '#2de2a6' },
+              { label: 'Отклонение бюджета', val: (budgetDev > 0 ? '+' : '') + formatMoney(budgetDev), color: budgetDev >= 0 ? '#ff4d4d' : '#2de2a6' },
+              { label: '% Бюджета', val: budgetPct, unit: '%', color: '#ff9b45' },
             ].map((kpi, i) => (
               <div key={i} style={card}>
                 <div style={lbl}>{kpi.label}</div>
-                <div style={{ fontSize: '22px', fontWeight: 'bold', color: kpi.color }}>
-                  {kpi.val} <span style={{ fontSize: '12px', opacity: 0.6 }}>{kpi.unit || ''}</span>
+                <div style={{ fontSize: '26px', fontWeight: 'bold', color: kpi.color }}>
+                  {kpi.val} {kpi.unit && <span style={{ fontSize: '13px', opacity: 0.6 }}>{kpi.unit}</span>}
                 </div>
               </div>
             ))}
           </div>
 
+          {/* KPI Row 3 — Материалы */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '16px' }}>
+            {[
+              { label: 'Материалы План', val: formatMoney(materialPlan), color: '#2898ff' },
+              { label: 'Материалы Факт', val: formatMoney(materialFact), color: '#2de2a6' },
+              { label: 'Отклонение матер.', val: (materialDev > 0 ? '+' : '') + formatMoney(materialDev), color: materialDev >= 0 ? '#ff4d4d' : '#2de2a6' },
+              { label: '% Матер.', val: materialPct, unit: '%', color: '#ff9b45' },
+            ].map((kpi, i) => (
+              <div key={i} style={card}>
+                <div style={lbl}>{kpi.label}</div>
+                <div style={{ fontSize: '26px', fontWeight: 'bold', color: kpi.color }}>
+                  {kpi.val} {kpi.unit && <span style={{ fontSize: '13px', opacity: 0.6 }}>{kpi.unit}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Charts row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            {/* Trend */}
+            <div style={card}>
+              <div style={lbl}>Динамика выполнения плана (км)</div>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={trendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" />
+                  <XAxis dataKey="date" stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
+                  <YAxis stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
+                  <Tooltip contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12 }} />
+                  <Line type="monotone" dataKey="plan" stroke="#2898ff" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="fact" stroke="#2de2a6" strokeWidth={2} dot={{ r: 3, fill: '#2de2a6' }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Contractors */}
+            <div style={card}>
+              <div style={lbl}>Выполнение по подрядчикам (км)</div>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={contractorStats} layout="vertical" margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" horizontal={false} />
+                  <XAxis type="number" hide />
+                  <YAxis dataKey="name" type="category" stroke="#4b5563" fontSize={10} width={100} tick={{ fill: '#9ca3af' }} />
+                  <Tooltip cursor={{ fill: '#15251e' }} contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12 }} />
+                  <Bar dataKey="fact" fill="#2de2a6" barSize={12} radius={[0, 3, 3, 0]} />
+                  <Bar dataKey="plan" fill="#2898ff" barSize={12} radius={[0, 3, 3, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Sections bar chart */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={lbl}>Выработка по участкам (км)</div>
             <ResponsiveContainer width="100%" height={340}>
@@ -233,148 +389,58 @@ export default function App() {
             </ResponsiveContainer>
           </div>
 
+          {/* Table */}
           <div style={card}>
-            <div style={lbl}>% выполнения по датам</div>
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" />
-                <XAxis dataKey="date" stroke="#4b5563" fontSize={11} tick={{ fill: '#9ca3af' }} />
-                <YAxis stroke="#4b5563" fontSize={11} tick={{ fill: '#9ca3af' }} domain={[0, 100]} unit="%" />
-                <Tooltip cursor={false} contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12, color: '#fff' }} />
-                <Line type="monotone" dataKey="pct" stroke="#ff9b45" strokeWidth={3} dot={{ r: 4, fill: '#ff9b45' }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div style={{ ...card, marginTop: '16px' }}>
-            <div style={lbl}>Статус по подрядчикам</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px', marginTop: '8px' }}>
-              {contractorStats.map((c, i) => (
-                <div key={i} style={{ background: '#16251e', borderRadius: '8px', padding: '14px', border: '1px solid #1d2d24' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{c.name}</span>
-                    <span style={{ fontSize: '16px', fontWeight: 'bold', color: c.pct >= 100 ? '#2de2a6' : c.pct >= 80 ? '#ff9b45' : '#ff4d4d' }}>{c.pct}%</span>
-                  </div>
-                  <div style={{ height: '4px', background: '#1d2d24', borderRadius: '2px', overflow: 'hidden' }}>
-                    <div style={{ width: `${Math.min(c.pct, 100)}%`, height: '100%', background: c.pct >= 100 ? '#2de2a6' : c.pct >= 80 ? '#ff9b45' : '#ff4d4d' }} />
-                  </div>
-                  <div style={{ marginTop: '6px', fontSize: '11px', color: '#6b7280' }}>
-                    {c.fact.toFixed(1)} / {c.plan.toFixed(1)} км
-                  </div>
-                </div>
-              ))}
+            <div style={{ ...lbl, marginBottom: '12px' }}>Детализация по участкам</div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ color: '#6b7280', textAlign: 'left', borderBottom: '1px solid #1d2d24' }}>
+                    <th style={{ padding: '8px' }}>Участок</th>
+                    <th style={{ padding: '8px' }}>Подрядчик</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>План, км</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Факт, км</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Откл, км</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>%</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Бюджет План</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Бюджет Факт</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Матер. План</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Матер. Факт</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((r, i) => {
+                    const plan = Number(r["План км"]) || 0;
+                    const fact = Number(r["Факт км"]) || 0;
+                    const dev = fact - plan;
+                    const pct = plan > 0 ? ((fact / plan) * 100).toFixed(1) : 0;
+                    return (
+                      <tr key={i} style={{ borderBottom: '1px solid #16251e' }}>
+                        <td style={{ padding: '8px', color: '#e5e7eb' }}>{r["Участок"]}</td>
+                        <td style={{ padding: '8px', color: '#9ca3af' }}>{r["Подрядчик"]}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#2898ff' }}>{plan.toFixed(1)}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#2de2a6' }}>{fact.toFixed(1)}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: dev >= 0 ? '#2de2a6' : '#ff4d4d' }}>{dev > 0 ? '+' : ''}{dev.toFixed(1)}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#ff9b45' }}>{pct}%</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#9ca3af' }}>{formatMoney(Number(r["Стоим. СМР [План]"]) || 0)}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#9ca3af' }}>{formatMoney(Number(r["Стоим. СМР [Факт]"]) || 0)}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#9ca3af' }}>{formatMoney(Number(r["Стоим. матер. [План]"]) || 0)}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#9ca3af' }}>{formatMoney(Number(r["Стоим. матер. [Факт]"]) || 0)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         </>
       )}
 
-      {activeTab === 'pir' && (
-        <div style={card}>
-          <div style={lbl}>Статус ПИР/ПСД</div>
-          <div style={{ overflowX: 'auto', marginTop: '12px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #1d2d24' }}>
-                  {['Участок', 'Статус ПСД', '% ПСД', 'Землеотвод'].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#6b7280' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {pirData.map((r, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #1d2d24' }}>
-                    <td style={{ padding: '8px 12px', fontWeight: 'bold' }}>{r["Участок"]}</td>
-                    <td style={{ padding: '8px 12px' }}>{r["Статус ПСД"]}</td>
-                    <td style={{ padding: '8px 12px' }}>{r["% ПСД"]}%</td>
-                    <td style={{ padding: '8px 12px' }}>{r["Землеотвод"]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'materials' && (
-        <div style={card}>
-          <div style={lbl}>Остатки ТМЦ на {latestTmcDate}</div>
-          <div style={{ overflowX: 'auto', marginTop: '12px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #1d2d24' }}>
-                  {['Материал', 'Остаток', 'Дефицит'].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#6b7280' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTmc.map((r, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #1d2d24' }}>
-                    <td style={{ padding: '8px 12px' }}>{r["Наименование материала"]}</td>
-                    <td style={{ padding: '8px 12px' }}>{r["Остаток на дату"]}</td>
-                    <td style={{ padding: '8px 12px', color: (Number(r["Дефицит(-)/Запас(+)"]) || 0) < 0 ? '#ff4d4d' : '#2de2a6' }}>
-                      {r["Дефицит(-)/Запас(+)"]}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'schedule' && (
-        <div style={card}>
-          <div style={lbl}>Сроки проекта</div>
-          <div style={{ overflowX: 'auto', marginTop: '12px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #1d2d24' }}>
-                  {['Задача', 'План', 'Факт', 'Отклонение'].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#6b7280' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredDates.map((r, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #1d2d24' }}>
-                    <td style={{ padding: '8px 12px' }}>{r["Задача"] || r["Участок"]}</td>
-                    <td style={{ padding: '8px 12px' }}>{r["Плановая дата"] || r["План"]}</td>
-                    <td style={{ padding: '8px 12px' }}>{r["Фактическая дата"] || r["Факт"]}</td>
-                    <td style={{ padding: '8px 12px', color: (Number(r["Отклонение (дней)"]) || 0) > 0 ? '#ff4d4d' : '#2de2a6' }}>
-                      {r["Отклонение (дней)"]}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'changes' && (
-        <div style={card}>
-          <div style={lbl}>Изменения проекта</div>
-          <div style={{ overflowX: 'auto', marginTop: '12px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #1d2d24' }}>
-                  {['Объект', 'Объём План', 'Объём Факт'].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#6b7280' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredChanges.map((r, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #1d2d24' }}>
-                    <td style={{ padding: '8px 12px' }}>{r["Название"]}</td>
-                    <td style={{ padding: '8px 12px' }}>{r["Объём [План]"]}</td>
-                    <td style={{ padding: '8px 12px' }}>{r["Объём [Факт]"]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {activeTab !== 'construction' && (
+        <div style={{ ...card, alignItems: 'center', justifyContent: 'center', minHeight: '300px', textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#2de2a6', marginBottom: '8px' }}>В разработке</div>
+          <div style={{ fontSize: '13px', color: '#6b7280' }}>Раздел будет доступен в ближайшем обновлении</div>
         </div>
       )}
     </div>
