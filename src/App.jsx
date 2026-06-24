@@ -310,43 +310,77 @@ export default function App() {
               </ResponsiveContainer>
             </div>
 
-            {/* Contractors — ВЕРТИКАЛЬНЫЙ ГРАФИК */}
+            {/* Contractors — ВЕРТИКАЛЬНЫЙ ГРАФИК (чистый) */}
             <div style={card}>
               <div style={lbl}>Выполнение по подрядчикам (км)</div>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={contractorStats} margin={{ top: 25, right: 10, left: -20, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" vertical={false} />
-                  <XAxis dataKey="name" stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} interval={0} />
-                  <YAxis stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
-                  <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 11 }} />
-                  <Bar dataKey="plan" fill="#2898ff" radius={[3, 3, 0, 0]} barSize={25}>
-                    <LabelList dataKey="plan" position="top" style={{ fill: '#2898ff', fontSize: 10, fontWeight: 'bold' }} />
+                <BarChart data={contractorStats} margin={{ top: 35, right: 10, left: 10, bottom: 5 }} barGap={2}>
+                  <Tooltip
+                    cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                    contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 11, borderRadius: '8px' }}
+                  />
+                  <Bar dataKey="plan" fill="#2898ff" radius={[4, 4, 0, 0]} barSize={45}>
+                    <LabelList dataKey="plan" position="top" style={{ fill: '#2898ff', fontSize: 11, fontWeight: 'bold' }} formatter={(v) => v > 0 ? v : ''} />
                   </Bar>
-                  <Bar dataKey="fact" fill="#2de2a6" radius={[3, 3, 0, 0]} barSize={25}>
-                    <LabelList dataKey="fact" position="top" style={{ fill: '#2de2a6', fontSize: 10, fontWeight: 'bold' }} />
+                  <Bar dataKey="fact" fill="#2de2a6" radius={[4, 4, 0, 0]} barSize={45}>
+                    <LabelList dataKey="fact" position="top" style={{ fill: '#2de2a6', fontSize: 11, fontWeight: 'bold' }} formatter={(v) => v > 0 ? v : ''} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Sections bar chart — ВОЗВРАЩЕНО В ОРИГИНАЛ */}
+          {/* Sections bar chart — ДИНАМИЧЕСКИЙ С УБОРКОЙ ПУСТЫХ */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={lbl}>Выработка по участкам (км)</div>
-            <ResponsiveContainer width="100%" height={340}>
-              <BarChart layout="vertical" data={filtered} margin={{ left: 10, right: 50, top: 10, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" horizontal={false} />
-                <XAxis type="number" hide />
-                <YAxis dataKey="Участок" type="category" stroke="#4b5563" fontSize={10} width={130} tick={{ fill: '#9ca3af' }} />
-                <Tooltip cursor={{ fill: '#15251e' }} contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12 }} />
-                <Bar dataKey="План км" fill="#2898ff" barSize={8} radius={[0, 3, 3, 0]}>
-                  <LabelList dataKey="План км" position="insideRight" style={{ fill: '#fff', fontSize: 9, fontWeight: 'bold' }} />
-                </Bar>
-                <Bar dataKey="Факт км" fill="#2de2a6" barSize={8} radius={[0, 3, 3, 0]}>
-                  <LabelList dataKey="Факт км" position="right" style={{ fill: '#2de2a6', fontSize: 10 }} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {(() => {
+              const visibleSections = filtered.filter(r =>
+                (Number(r["План км"]) || 0) > 0 || (Number(r["Факт км"]) || 0) > 0
+              );
+              const dynamicHeight = Math.min(500, Math.max(150, visibleSections.length * 55));
+              return (
+                <div style={{ height: dynamicHeight, transition: 'height 0.3s ease' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      layout="vertical"
+                      data={visibleSections}
+                      margin={{ left: 10, right: 60, top: 10, bottom: 10 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" horizontal={false} />
+                      <XAxis type="number" hide />
+                      <YAxis
+                        dataKey="Участок"
+                        type="category"
+                        stroke="#4b5563"
+                        fontSize={11}
+                        width={140}
+                        tick={{ fill: '#9ca3af' }}
+                      />
+                      <Tooltip
+                        cursor={{ fill: '#15251e' }}
+                        contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12 }}
+                      />
+                      <Bar
+                        dataKey="План км"
+                        fill="#2898ff"
+                        barSize={visibleSections.length < 5 ? 28 : 12}
+                        radius={[0, 4, 4, 0]}
+                      >
+                        <LabelList dataKey="План км" position="insideRight" style={{ fill: '#fff', fontSize: 10, fontWeight: 'bold' }} />
+                      </Bar>
+                      <Bar
+                        dataKey="Факт км"
+                        fill="#2de2a6"
+                        barSize={visibleSections.length < 5 ? 28 : 12}
+                        radius={[0, 4, 4, 0]}
+                      >
+                        <LabelList dataKey="Факт км" position="right" style={{ fill: '#2de2a6', fontSize: 11, fontWeight: 'bold' }} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Table */}
