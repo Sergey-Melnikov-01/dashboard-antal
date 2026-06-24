@@ -310,23 +310,27 @@ export default function App() {
               </ResponsiveContainer>
             </div>
 
-            {/* Contractors */}
+            {/* Contractors — ВЕРТИКАЛЬНЫЙ ГРАФИК */}
             <div style={card}>
               <div style={lbl}>Выполнение по подрядчикам (км)</div>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={contractorStats} layout="vertical" margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" horizontal={false} />
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" stroke="#4b5563" fontSize={10} width={100} tick={{ fill: '#9ca3af' }} />
-                  <Tooltip cursor={{ fill: '#15251e' }} contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12 }} />
-                  <Bar dataKey="fact" fill="#2de2a6" barSize={12} radius={[0, 3, 3, 0]} />
-                  <Bar dataKey="plan" fill="#2898ff" barSize={12} radius={[0, 3, 3, 0]} />
+                <BarChart data={contractorStats} margin={{ top: 25, right: 10, left: -20, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" vertical={false} />
+                  <XAxis dataKey="name" stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} interval={0} />
+                  <YAxis stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
+                  <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 11 }} />
+                  <Bar dataKey="plan" fill="#2898ff" radius={[3, 3, 0, 0]} barSize={25}>
+                    <LabelList dataKey="plan" position="top" style={{ fill: '#2898ff', fontSize: 10, fontWeight: 'bold' }} />
+                  </Bar>
+                  <Bar dataKey="fact" fill="#2de2a6" radius={[3, 3, 0, 0]} barSize={25}>
+                    <LabelList dataKey="fact" position="top" style={{ fill: '#2de2a6', fontSize: 10, fontWeight: 'bold' }} />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Sections bar chart */}
+          {/* Sections bar chart — ВОЗВРАЩЕНО В ОРИГИНАЛ */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={lbl}>Выработка по участкам (км)</div>
             <ResponsiveContainer width="100%" height={340}>
