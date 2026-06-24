@@ -17,23 +17,24 @@ const parseDate = s => {
   return new Date(y, m - 1, d);
 };
 
-const formatMoney = v => {
-  if (Math.abs(v) >= 1e9) return (v / 1e9).toFixed(2) + ' млрд ₸';
-  if (Math.abs(v) >= 1e6) return (v / 1e6).toFixed(1) + ' млн ₸';
-  return v.toLocaleString('ru') + ' ₸';
+const toNum = v => {
+  const n = Number(v);
+  return isNaN(n) ? 0 : n;
 };
 
 export default function App() {
   const [allData, setAllData] = useState([]);
+  const [metricsData, setMetricsData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('construction');
+  const [activeTab, setActiveTab] = useState('construction'); // 'construction' | 'schedule' (metrics)
   const [animatingTab, setAnimatingTab] = useState(null);
+
+  // Global filter states (shared across tabs as requested)
   const [selectedBranch, setSelectedBranch] = useState('Все');
   const [selectedContractor, setSelectedContractor] = useState('Все');
   const [selectedSection, setSelectedSection] = useState('Все');
   const [selectedDate, setSelectedDate] = useState('');
   const [openDropdown, setOpenDropdown] = useState(null);
-  const [metricsData, setMetricsData] = useState([]);
 
   const tabs = [
     { id: 'construction', label: '🏗️ СМР' },
@@ -50,24 +51,22 @@ export default function App() {
 
   useEffect(() => {
     axios.get(API_URL).then(res => {
-      const raw = res.data;
+      const raw = res.data || {};
 
-      // основная загрузка СМР (как было)
+      // СМР
       setAllData(Array.isArray(raw?.DB_SMR) ? raw.DB_SMR : []);
 
-      // --- debug + попытки обнаружить массив метрик в ответе ---
-      console.log('API response top-level keys:', Object.keys(raw || {}));
-
+      // Метрики (если есть)
       if (Array.isArray(raw?.DB_METRIC)) {
         setMetricsData(raw.DB_METRIC);
-        console.log('Данные загружены из DB_METRIC, кол-во строк:', raw.DB_METRIC.length);
+        console.log('Loaded DB_METRIC rows:', raw.DB_METRIC.length);
       } else if (Array.isArray(raw?.DB_PIR)) {
+        // fallback if needed
         setMetricsData(raw.DB_PIR);
-        console.log('Данные загружены из DB_PIR, кол-во строк:', raw.DB_PIR.length);
+        console.log('Fallback: loaded DB_PIR for metrics rows:', raw.DB_PIR.length);
       } else {
-        // Если ни метрик, ни ПИР нет, временно берем СМР, чтобы фильтры не были пустыми
-        setMetricsData(Array.isArray(raw?.DB_SMR) ? raw.DB_SMR : []);
-        console.log('Используется fallback (СМР или пусто)');
+        setMetricsData([]);
+        console.log('No DB_METRIC found — metricsData empty');
       }
 
       setLoading(false);
@@ -77,7 +76,9 @@ export default function App() {
     });
   }, []);
 
-  // Оптимизированные вычисления списков с помощью useMemo
+  // -----------------------------
+  // COMMON (for СМР)
+  // -----------------------------
   const dates = useMemo(() => {
     return [...new Set(allData.map(r => r["Дата отчета"]).filter(Boolean))]
       .sort((a, b) => parseDate(a) - parseDate(b));
@@ -94,117 +95,144 @@ export default function App() {
   const sections = useMemo(() => {
     return [...new Set(
       allData
-        .filter(r => (selectedBranch === 'Все' || r["Ветка"] === selectedBranch) && 
+        .filter(r => (selectedBranch === 'Все' || r["Ветка"] === selectedBranch) &&
                      (selectedContractor === 'Все' || r["Подрядчик"] === selectedContractor))
         .map(r => r["Участок"]).filter(Boolean)
     )];
   }, [allData, selectedBranch, selectedContractor]);
 
   const latestDate = dates[dates.length - 1];
-  const activeDate = selectedDate || latestDate;
+  const activeDate = selectedDate && dates.includes(selectedDate) ? selectedDate : latestDate;
 
-  // Фильтрация данных с проверкой типов
   const filtered = useMemo(() => {
     return allData.filter(r => {
-      // Проверяем дату
+      if (!r) return false;
       if (r["Дата отчета"] !== activeDate) return false;
-      
-      // Проверяем ветку
       if (selectedBranch !== 'Все' && r["Ветка"] !== selectedBranch) return false;
-      
-      // Проверяем подрядчика
       if (selectedContractor !== 'Все' && r["Подрядчик"] !== selectedContractor) return false;
-      
-      // Проверяем участок
       if (selectedSection !== 'Все' && r["Участок"] !== selectedSection) return false;
-      
       return true;
     });
   }, [allData, activeDate, selectedBranch, selectedContractor, selectedSection]);
 
-  // --- KPI ---
   const { totalFact, totalPlan, deviation, totalPercent } = useMemo(() => {
-    const fact = filtered.reduce((s, r) => {
-      const value = Number(r["Факт км"]);
-      return s + (isNaN(value) ? 0 : value);
-    }, 0);
-    
-    const plan = filtered.reduce((s, r) => {
-      const value = Number(r["План км"]);
-      return s + (isNaN(value) ? 0 : value);
-    }, 0);
-    
+    const fact = filtered.reduce((s, r) => s + toNum(r["Факт км"]), 0);
+    const plan = filtered.reduce((s, r) => s + toNum(r["План км"]), 0);
     const dev = fact - plan;
-    const percent = plan > 0 ? ((fact / plan) * 100).toFixed(1) : 0;
-    
-    return {
-      totalFact: fact,
-      totalPlan: plan,
-      deviation: dev,
-      totalPercent: percent
-    };
+    const pct = plan > 0 ? ((fact / plan) * 100).toFixed(1) : 0;
+    return { totalFact: fact, totalPlan: plan, deviation: dev, totalPercent: pct };
   }, [filtered]);
 
-  // --- Charts data ---
   const trendData = useMemo(() => {
     return dates.map(date => {
       const rows = allData.filter(r => {
-        // Проверяем дату
+        if (!r) return false;
         if (r["Дата отчета"] !== date) return false;
-        
-        // Проверяем ветку
         if (selectedBranch !== 'Все' && r["Ветка"] !== selectedBranch) return false;
-        
-        // Проверяем подрядчика
         if (selectedContractor !== 'Все' && r["Подрядчик"] !== selectedContractor) return false;
-        
-        // Проверяем участок
         if (selectedSection !== 'Все' && r["Участок"] !== selectedSection) return false;
-        
         return true;
       });
-      
-      const f = rows.reduce((s, r) => {
-        const value = Number(r["Факт км"]);
-        return s + (isNaN(value) ? 0 : value);
-      }, 0);
-      
-      const p = rows.reduce((s, r) => {
-        const value = Number(r["План км"]);
-        return s + (isNaN(value) ? 0 : value);
-      }, 0);
-      
-      return { 
-        date, 
-        plan: +p.toFixed(1), 
-        fact: +f.toFixed(1), 
-        pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 
-      };
+      const f = rows.reduce((s, r) => s + toNum(r["Факт км"]), 0);
+      const p = rows.reduce((s, r) => s + toNum(r["План км"]), 0);
+      return { date, plan: +p.toFixed(1), fact: +f.toFixed(1), pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 };
     });
   }, [dates, allData, selectedBranch, selectedContractor, selectedSection]);
 
   const contractorStats = useMemo(() => {
     return contractors.map(c => {
       const rows = filtered.filter(r => r["Подрядчик"] === c);
-      
-      const f = rows.reduce((s, r) => {
-        const value = Number(r["Факт км"]);
-        return s + (isNaN(value) ? 0 : value);
-      }, 0);
-      
-      const p = rows.reduce((s, r) => {
-        const value = Number(r["План км"]);
-        return s + (isNaN(value) ? 0 : value);
-      }, 0);
-      
-      return { 
-        name: c, 
-        fact: f, 
-        plan: p, 
-        pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 
-      };
+      const f = rows.reduce((s, r) => s + toNum(r["Факт км"]), 0);
+      const p = rows.reduce((s, r) => s + toNum(r["План км"]), 0);
+      return { name: c, fact: f, plan: p, pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 };
     }).filter(c => c.fact > 0 || c.plan > 0);
   }, [contractors, filtered]);
+
+  // -----------------------------
+  // METRICS (DB_METRIC) — new section
+  // -----------------------------
+  const metricsDates = useMemo(() => {
+    return [...new Set(metricsData.map(r => r["Дата отчета"]).filter(Boolean))]
+      .sort((a, b) => parseDate(a) - parseDate(b));
+  }, [metricsData]);
+
+  const metricsLatestDate = metricsDates[metricsDates.length - 1];
+  // if global selectedDate exists in metricsDates, use it; else fall back to metricsLatestDate
+  const metricActiveDate = selectedDate && metricsDates.includes(selectedDate) ? selectedDate : metricsLatestDate;
+
+  const metricsBranches = useMemo(() => {
+    return [...new Set(metricsData.map(r => r["Ветка"]).filter(Boolean))];
+  }, [metricsData]);
+
+  const metricsContractors = useMemo(() => {
+    return [...new Set(metricsData.map(r => r["Подрядчик"]).filter(Boolean))];
+  }, [metricsData]);
+
+  const metricsSections = useMemo(() => {
+    return [...new Set(
+      metricsData
+        .filter(r => (selectedBranch === 'Все' || r["Ветка"] === selectedBranch) &&
+                     (selectedContractor === 'Все' || r["Подрядчик"] === selectedContractor))
+        .map(r => r["Участок"]).filter(Boolean)
+    )];
+  }, [metricsData, selectedBranch, selectedContractor]);
+
+  const metricsFiltered = useMemo(() => {
+    return metricsData.filter(r => {
+      if (!r) return false;
+      if (r["Дата отчета"] !== metricActiveDate) return false;
+      if (selectedBranch !== 'Все' && r["Ветка"] !== selectedBranch) return false;
+      if (selectedContractor !== 'Все' && r["Подрядчик"] !== selectedContractor) return false;
+      if (selectedSection !== 'Все' && r["Участок"] !== selectedSection) return false;
+      return true;
+    });
+  }, [metricsData, metricActiveDate, selectedBranch, selectedContractor, selectedSection]);
+
+  // KPI for metrics
+  const metricsKPI = useMemo(() => {
+    const cablePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель План"]), 0);
+    const cableFact = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель Факт"]), 0);
+    const pipePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Труба План"]), 0);
+    const pipeFact = metricsFiltered.reduce((s, r) => s + toNum(r["Труба Факт"]), 0);
+    const backfillPlan = metricsFiltered.reduce((s, r) => s + toNum(r["Засыпка План"]), 0);
+    const backfillFact = metricsFiltered.reduce((s, r) => s + toNum(r["Засыпка Факт"]), 0);
+    const hddPlan = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ План"]), 0);
+    const hddFact = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ Факт"]), 0);
+    const cablePct = cablePlan > 0 ? ((cableFact / cablePlan) * 100).toFixed(1) : 0;
+    return {
+      cablePlan, cableFact, cablePct,
+      pipePlan, pipeFact,
+      backfillPlan, backfillFact,
+      hddPlan, hddFact
+    };
+  }, [metricsFiltered]);
+
+  const metricsTrend = useMemo(() => {
+    return metricsDates.map(date => {
+      const rows = metricsData.filter(r => {
+        if (r["Дата отчета"] !== date) return false;
+        if (selectedBranch !== 'Все' && r["Ветка"] !== selectedBranch) return false;
+        if (selectedContractor !== 'Все' && r["Подрядчик"] !== selectedContractor) return false;
+        if (selectedSection !== 'Все' && r["Участок"] !== selectedSection) return false;
+        return true;
+      });
+      const cableP = rows.reduce((s, r) => s + toNum(r["Кабель План"]), 0);
+      const cableF = rows.reduce((s, r) => s + toNum(r["Кабель Факт"]), 0);
+      return { date, cablePlan: +cableP.toFixed(1), cableFact: +cableF.toFixed(1) };
+    });
+  }, [metricsDates, metricsData, selectedBranch, selectedContractor, selectedSection]);
+
+  const metricsSectionBars = useMemo(() => {
+    // aggregate per section for current metric date & filters
+    const map = {};
+    metricsFiltered.forEach(r => {
+      const key = r["Участок"] || '—';
+      if (!map[key]) map[key] = { section: key, cablePlan: 0, cableFact: 0 };
+      map[key].cablePlan += toNum(r["Кабель План"]);
+      map[key].cableFact += toNum(r["Кабель Факт"]);
+    });
+    return Object.values(map).sort((a,b) => b.cablePlan + b.cableFact - (a.cablePlan + a.cableFact));
+  }, [metricsFiltered]);
 
   const toggleDropdown = (name) => setOpenDropdown(prev => prev === name ? null : name);
 
@@ -319,6 +347,9 @@ export default function App() {
     </div>
   );
 
+  // choose date options based on active tab
+  const dateOptionsForDropdown = activeTab === 'schedule' ? metricsDates : dates;
+
   return (
     <div style={{ minHeight: '100vh', background: bg, color: '#e2e8f0', padding: '30px 36px', fontFamily: 'Inter, sans-serif' }}>
       {/* Header */}
@@ -328,7 +359,7 @@ export default function App() {
         </h1>
         <div style={{ color: '#94a3b8', fontSize: '12px', textAlign: 'right' }}>
           ДАННЫЕ ОБНОВЛЕНЫ:<br />
-          <span style={{ color: 'white', fontWeight: 'bold' }}>{activeDate}</span>
+          <span style={{ color: 'white', fontWeight: 'bold' }}>{activeTab === 'schedule' ? (metricActiveDate || '—') : (activeDate || '—')}</span>
         </div>
       </div>
 
@@ -347,7 +378,7 @@ export default function App() {
 
       {activeTab === 'construction' && (
         <>
-          {/* Filters */}
+          {/* Filters (construction uses precomputed lists) */}
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px', alignItems: 'flex-start' }} onClick={e => { if (e.target === e.currentTarget) setOpenDropdown(null); }}>
             <PushDropdown
               name="branch"
@@ -374,7 +405,7 @@ export default function App() {
               name="date"
               label="Дата"
               value={selectedDate}
-              options={dates}
+              options={dateOptionsForDropdown}
               onChange={v => setSelectedDate(v === 'Все' ? '' : v)}
               onReset=""
             />
@@ -414,7 +445,7 @@ export default function App() {
               </ResponsiveContainer>
             </div>
 
-            {/* Contractors — ВЕРТИКАЛЬНЫЙ ГРАФИК (чистый) */}
+            {/* Contractors */}
             <div style={card}>
               <div style={lbl}>Выполнение по подрядчикам (км)</div>
               <ResponsiveContainer width="100%" height={300}>
@@ -434,12 +465,12 @@ export default function App() {
             </div>
           </div>
 
-          {/* Sections bar chart — ДИНАМИЧЕСКИЙ С УБОРКОЙ ПУСТЫХ */}
+          {/* Sections chart */}
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={lbl}>Выработка по участкам (км)</div>
             {(() => {
               const visibleSections = filtered.filter(r =>
-                (Number(r["План км"]) || 0) > 0 || (Number(r["Факт км"]) || 0) > 0
+                (toNum(r["План км"]) || 0) > 0 || (toNum(r["Факт км"]) || 0) > 0
               );
               const dynamicHeight = Math.min(500, Math.max(150, visibleSections.length * 55));
               return (
@@ -504,10 +535,10 @@ export default function App() {
                 </thead>
                 <tbody>
                   {filtered
-                    .filter(r => (Number(r["План км"]) || 0) > 0 || (Number(r["Факт км"]) || 0) > 0)
+                    .filter(r => (toNum(r["План км"]) || 0) > 0 || (toNum(r["Факт км"]) || 0) > 0)
                     .map((r, i) => {
-                      const plan = Number(r["План км"]) || 0;
-                      const fact = Number(r["Факт км"]) || 0;
+                      const plan = toNum(r["План км"]);
+                      const fact = toNum(r["Факт км"]);
                       const dev = fact - plan;
                       const pct = plan > 0 ? ((fact / plan) * 100).toFixed(1) : 0;
                       return (
@@ -528,7 +559,145 @@ export default function App() {
         </>
       )}
 
-      {activeTab !== 'construction' && (
+      {activeTab === 'schedule' && (
+        <>
+          {/* FILTERS for METRICS (same UI components, but options from metrics) */}
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px', alignItems: 'flex-start' }} onClick={e => { if (e.target === e.currentTarget) setOpenDropdown(null); }}>
+            <PushDropdown
+              name="branch_metrics"
+              label="Ветка"
+              value={selectedBranch}
+              options={metricsBranches.length ? metricsBranches : branches}
+              onChange={v => { setSelectedBranch(v); setSelectedSection('Все'); }}
+            />
+            <PushDropdown
+              name="contractor_metrics"
+              label="Подрядчик"
+              value={selectedContractor}
+              options={metricsContractors.length ? metricsContractors : contractors}
+              onChange={v => { setSelectedContractor(v); setSelectedSection('Все'); }}
+            />
+            <PushDropdown
+              name="section_metrics"
+              label="Участок"
+              value={selectedSection}
+              options={metricsSections.length ? metricsSections : sections}
+              onChange={v => setSelectedSection(v)}
+            />
+            <PushDropdown
+              name="date_metrics"
+              label="Дата"
+              value={selectedDate}
+              options={dateOptionsForDropdown}
+              onChange={v => setSelectedDate(v === 'Все' ? '' : v)}
+              onReset=""
+            />
+          </div>
+
+          {/* Metrics KPI row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '16px' }}>
+            {[
+              { label: 'Кабель (план)', val: metricsKPI.cablePlan.toFixed(1), unit: 'м', color: '#2898ff' },
+              { label: 'Кабель (факт)', val: metricsKPI.cableFact.toFixed(1), unit: 'м', color: '#2de2a6' },
+              { label: 'Выполнение кабеля', val: (metricsKPI.cablePct || 0), unit: '%', color: '#ff9b45' },
+              { label: 'Труба (факт)', val: metricsKPI.pipeFact.toFixed(1), unit: 'м', color: '#ff9b45' },
+            ].map((kpi, i) => (
+              <div key={i} style={card}>
+                <div style={lbl}>{kpi.label}</div>
+                <div style={{ fontSize: '22px', fontWeight: 'bold', color: kpi.color }}>
+                  {kpi.val} <span style={{ fontSize: '12px', opacity: 0.6 }}>{kpi.unit}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Charts: trend and section bars */}
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <div style={card}>
+              <div style={lbl}>Динамика прокладки кабеля (м)</div>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={metricsTrend} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" />
+                  <XAxis dataKey="date" stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
+                  <YAxis stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
+                  <Tooltip contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12 }} />
+                  <Line type="monotone" dataKey="cablePlan" stroke="#2898ff" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="cableFact" stroke="#2de2a6" strokeWidth={2} dot={{ r: 3, fill: '#2de2a6' }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div style={card}>
+              <div style={lbl}>Кабель по участкам (м)</div>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={metricsSectionBars} margin={{ top: 35, right: 10, left: 10, bottom: 5 }} barGap={4}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" />
+                  <XAxis dataKey="section" tick={{ fill: '#9ca3af' }} stroke="#4b5563" />
+                  <YAxis tick={{ fill: '#9ca3af' }} stroke="#4b5563" />
+                  <Tooltip contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 11 }} />
+                  <Bar dataKey="cablePlan" fill="#2898ff" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="cablePlan" position="top" style={{ fill: '#2898ff', fontSize: 11, fontWeight: 'bold' }} formatter={(v) => v > 0 ? v : ''} />
+                  </Bar>
+                  <Bar dataKey="cableFact" fill="#2de2a6" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="cableFact" position="top" style={{ fill: '#2de2a6', fontSize: 11, fontWeight: 'bold' }} formatter={(v) => v > 0 ? v : ''} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Metrics table */}
+          <div style={card}>
+            <div style={{ ...lbl, marginBottom: '12px' }}>Метрики — детализация по участкам</div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ color: '#6b7280', textAlign: 'left', borderBottom: '1px solid #1d2d24' }}>
+                    <th style={{ padding: '8px' }}>Участок</th>
+                    <th style={{ padding: '8px' }}>Подрядчик</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Кабель План</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Кабель Факт</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Труба План</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Труба Факт</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Засыпка План</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Засыпка Факт</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>ГНБ План</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>ГНБ Факт</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metricsFiltered.map((r, i) => {
+                    const cablePlan = toNum(r["Кабель План"]);
+                    const cableFact = toNum(r["Кабель Факт"]);
+                    const pipePlan = toNum(r["Труба План"]);
+                    const pipeFact = toNum(r["Труба Факт"]);
+                    const backfillPlan = toNum(r["Засыпка План"]);
+                    const backfillFact = toNum(r["Засыпка Факт"]);
+                    const hddPlan = toNum(r["ГНБ План"]);
+                    const hddFact = toNum(r["ГНБ Факт"]);
+                    return (
+                      <tr key={i} style={{ borderBottom: '1px solid #16251e' }}>
+                        <td style={{ padding: '8px', color: '#e5e7eb' }}>{r["Участок"]}</td>
+                        <td style={{ padding: '8px', color: '#9ca3af' }}>{r["Подрядчик"]}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#2898ff' }}>{cablePlan}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#2de2a6' }}>{cableFact}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#2898ff' }}>{pipePlan}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#2de2a6' }}>{pipeFact}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#2898ff' }}>{backfillPlan}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#2de2a6' }}>{backfillFact}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#2898ff' }}>{hddPlan}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#2de2a6' }}>{hddFact}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeTab !== 'construction' && activeTab !== 'schedule' && (
         <div style={{ ...card, alignItems: 'center', justifyContent: 'center', minHeight: '300px', textAlign: 'center' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#2de2a6', marginBottom: '8px' }}>В разработке</div>
