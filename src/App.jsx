@@ -88,16 +88,6 @@ export default function App() {
   const deviation = totalFact - totalPlan;
   const totalPercent = totalPlan > 0 ? ((totalFact / totalPlan) * 100).toFixed(1) : 0;
 
-  const budgetPlan = filtered.reduce((s, r) => s + (Number(r["Стоим. СМР [План]"]) || 0), 0);
-  const budgetFact = filtered.reduce((s, r) => s + (Number(r["Стоим. СМР [Факт]"]) || 0), 0);
-  const budgetDev = budgetFact - budgetPlan;
-  const budgetPct = budgetPlan > 0 ? ((budgetFact / budgetPlan) * 100).toFixed(1) : 0;
-
-  const materialPlan = filtered.reduce((s, r) => s + (Number(r["Стоим. матер. [План]"]) || 0), 0);
-  const materialFact = filtered.reduce((s, r) => s + (Number(r["Стоим. матер. [Факт]"]) || 0), 0);
-  const materialDev = materialFact - materialPlan;
-  const materialPct = materialPlan > 0 ? ((materialFact / materialPlan) * 100).toFixed(1) : 0;
-
   // --- Charts data ---
   const trendData = dates.map(date => {
     const rows = allData.filter(r =>
@@ -303,40 +293,6 @@ export default function App() {
             ))}
           </div>
 
-          {/* KPI Row 2 — Бюджет СМР */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '16px' }}>
-            {[
-              { label: 'Бюджет СМР План', val: formatMoney(budgetPlan), color: '#2898ff' },
-              { label: 'Бюджет СМР Факт', val: formatMoney(budgetFact), color: '#2de2a6' },
-              { label: 'Отклонение бюджета', val: (budgetDev > 0 ? '+' : '') + formatMoney(budgetDev), color: budgetDev >= 0 ? '#ff4d4d' : '#2de2a6' },
-              { label: '% Бюджета', val: budgetPct, unit: '%', color: '#ff9b45' },
-            ].map((kpi, i) => (
-              <div key={i} style={card}>
-                <div style={lbl}>{kpi.label}</div>
-                <div style={{ fontSize: '26px', fontWeight: 'bold', color: kpi.color }}>
-                  {kpi.val} {kpi.unit && <span style={{ fontSize: '13px', opacity: 0.6 }}>{kpi.unit}</span>}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* KPI Row 3 — Материалы */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '16px' }}>
-            {[
-              { label: 'Материалы План', val: formatMoney(materialPlan), color: '#2898ff' },
-              { label: 'Материалы Факт', val: formatMoney(materialFact), color: '#2de2a6' },
-              { label: 'Отклонение матер.', val: (materialDev > 0 ? '+' : '') + formatMoney(materialDev), color: materialDev >= 0 ? '#ff4d4d' : '#2de2a6' },
-              { label: '% Матер.', val: materialPct, unit: '%', color: '#ff9b45' },
-            ].map((kpi, i) => (
-              <div key={i} style={card}>
-                <div style={lbl}>{kpi.label}</div>
-                <div style={{ fontSize: '26px', fontWeight: 'bold', color: kpi.color }}>
-                  {kpi.val} {kpi.unit && <span style={{ fontSize: '13px', opacity: 0.6 }}>{kpi.unit}</span>}
-                </div>
-              </div>
-            ))}
-          </div>
-
           {/* Charts row */}
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '16px' }}>
             {/* Trend */}
@@ -402,10 +358,6 @@ export default function App() {
                     <th style={{ padding: '8px', textAlign: 'right' }}>Факт, км</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>Откл, км</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>%</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Бюджет План</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Бюджет Факт</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Матер. План</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Матер. Факт</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -422,10 +374,6 @@ export default function App() {
                         <td style={{ padding: '8px', textAlign: 'right', color: '#2de2a6' }}>{fact.toFixed(1)}</td>
                         <td style={{ padding: '8px', textAlign: 'right', color: dev >= 0 ? '#2de2a6' : '#ff4d4d' }}>{dev > 0 ? '+' : ''}{dev.toFixed(1)}</td>
                         <td style={{ padding: '8px', textAlign: 'right', color: '#ff9b45' }}>{pct}%</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#9ca3af' }}>{formatMoney(Number(r["Стоим. СМР [План]"]) || 0)}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#9ca3af' }}>{formatMoney(Number(r["Стоим. СМР [Факт]"]) || 0)}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#9ca3af' }}>{formatMoney(Number(r["Стоим. матер. [План]"]) || 0)}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#9ca3af' }}>{formatMoney(Number(r["Стоим. матер. [Факт]"]) || 0)}</td>
                       </tr>
                     );
                   })}
