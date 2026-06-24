@@ -38,8 +38,7 @@ export default function App() {
     { id: 'construction', label: '🏗️ СМР' },
     { id: 'pir', label: '📋 ПИР/ПСД' },
     { id: 'materials', label: '📦 ТМЦ' },
-    { id: 'schedule', label: '⏱️ Сроки' },
-    { id: 'changes', label: '📊 Изменения' }
+    { id: 'schedule', label: '📈 Метрики' },
   ];
 
   const handleTabClick = (id) => {
