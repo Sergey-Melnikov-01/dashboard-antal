@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
@@ -48,94 +48,163 @@ export default function App() {
     setTimeout(() => setAnimatingTab(null), 700);
   };
 
- useEffect(() => {
-  axios.get(API_URL).then(res => {
-    const raw = res.data;
+  useEffect(() => {
+    axios.get(API_URL).then(res => {
+      const raw = res.data;
 
-    // основная загрузка СМР (как было)
-    setAllData(Array.isArray(raw?.DB_SMR) ? raw.DB_SMR : []);
+      // основная загрузка СМР (как было)
+      setAllData(Array.isArray(raw?.DB_SMR) ? raw.DB_SMR : []);
 
-    // --- debug + попытки обнаружить массив метрик в ответе ---
-    console.log('API response top-level keys:', Object.keys(raw || {}));
+      // --- debug + попытки обнаружить массив метрик в ответе ---
+      console.log('API response top-level keys:', Object.keys(raw || {}));
 
-    if (Array.isArray(raw?.DB_METRICS)) {
-      setMetricsData(raw.DB_METRICS);
-      console.log('metrics loaded from DB_METRICS, length=', raw.DB_METRICS.length);
-    } else if (Array.isArray(raw?.DB_PIR)) {
-      setMetricsData(raw.DB_PIR);
-      console.log('metrics loaded from DB_PIR, length=', raw.DB_PIR.length);
-    } else if (Array.isArray(raw?.METRICS)) {
-      setMetricsData(raw.METRICS);
-      console.log('metrics loaded from METRICS, length=', raw.METRICS.length);
-    } else if (Array.isArray(raw)) {
-      // если ответ — сразу массив
-      setMetricsData(raw);
-      console.log('metrics loaded from top-level array, length=', raw.length);
-    } else {
-      // fallback — используем SMR как запасной источник
-      setMetricsData(Array.isArray(raw?.DB_SMR) ? raw.DB_SMR : []);
-      console.log('metrics fallback used (DB_SMR or empty)');
-    }
+      if (Array.isArray(raw?.DB_METRIC)) {
+        setMetricsData(raw.DB_METRIC);
+        console.log('Данные загружены из DB_METRIC, кол-во строк:', raw.DB_METRIC.length);
+      } else if (Array.isArray(raw?.DB_PIR)) {
+        setMetricsData(raw.DB_PIR);
+        console.log('Данные загружены из DB_PIR, кол-во строк:', raw.DB_PIR.length);
+      } else {
+        // Если ни метрик, ни ПИР нет, временно берем СМР, чтобы фильтры не были пустыми
+        setMetricsData(Array.isArray(raw?.DB_SMR) ? raw.DB_SMR : []);
+        console.log('Используется fallback (СМР или пусто)');
+      }
 
-    setLoading(false);
-  }).catch(err => {
-    console.error('API load error', err);
-    setLoading(false);
-  });
-}, []);
+      setLoading(false);
+    }).catch(err => {
+      console.error('API load error', err);
+      setLoading(false);
+    });
+  }, []);
 
+  // Оптимизированные вычисления списков с помощью useMemo
+  const dates = useMemo(() => {
+    return [...new Set(allData.map(r => r["Дата отчета"]).filter(Boolean))]
+      .sort((a, b) => parseDate(a) - parseDate(b));
+  }, [allData]);
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1c1d26', color: 'white', fontFamily: 'sans-serif' }}>
-      Загрузка аналитики АНТАЛ...
-    </div>
-  );
+  const branches = useMemo(() => {
+    return [...new Set(allData.map(r => r["Ветка"]).filter(Boolean))];
+  }, [allData]);
 
-  const dates = [...new Set(allData.map(r => r["Дата отчета"]).filter(Boolean))]
-    .sort((a, b) => parseDate(a) - parseDate(b));
+  const contractors = useMemo(() => {
+    return [...new Set(allData.map(r => r["Подрядчик"]).filter(Boolean))];
+  }, [allData]);
+
+  const sections = useMemo(() => {
+    return [...new Set(
+      allData
+        .filter(r => (selectedBranch === 'Все' || r["Ветка"] === selectedBranch) && 
+                     (selectedContractor === 'Все' || r["Подрядчик"] === selectedContractor))
+        .map(r => r["Участок"]).filter(Boolean)
+    )];
+  }, [allData, selectedBranch, selectedContractor]);
+
   const latestDate = dates[dates.length - 1];
   const activeDate = selectedDate || latestDate;
 
-  const branches = [...new Set(allData.map(r => r["Ветка"]).filter(Boolean))];
-  const contractors = [...new Set(allData.map(r => r["Подрядчик"]).filter(Boolean))];
-  const sections = [...new Set(
-    allData
-      .filter(r => (selectedBranch === 'Все' || r["Ветка"] === selectedBranch) && (selectedContractor === 'Все' || r["Подрядчик"] === selectedContractor))
-      .map(r => r["Участок"]).filter(Boolean)
-  )];
-
-  const filtered = allData.filter(r =>
-    r["Дата отчета"] === activeDate &&
-    (selectedBranch === 'Все' || r["Ветка"] === selectedBranch) &&
-    (selectedContractor === 'Все' || r["Подрядчик"] === selectedContractor) &&
-    (selectedSection === 'Все' || r["Участок"] === selectedSection)
-  );
+  // Фильтрация данных с проверкой типов
+  const filtered = useMemo(() => {
+    return allData.filter(r => {
+      // Проверяем дату
+      if (r["Дата отчета"] !== activeDate) return false;
+      
+      // Проверяем ветку
+      if (selectedBranch !== 'Все' && r["Ветка"] !== selectedBranch) return false;
+      
+      // Проверяем подрядчика
+      if (selectedContractor !== 'Все' && r["Подрядчик"] !== selectedContractor) return false;
+      
+      // Проверяем участок
+      if (selectedSection !== 'Все' && r["Участок"] !== selectedSection) return false;
+      
+      return true;
+    });
+  }, [allData, activeDate, selectedBranch, selectedContractor, selectedSection]);
 
   // --- KPI ---
-  const totalFact = filtered.reduce((s, r) => s + (Number(r["Факт км"]) || 0), 0);
-  const totalPlan = filtered.reduce((s, r) => s + (Number(r["План км"]) || 0), 0);
-  const deviation = totalFact - totalPlan;
-  const totalPercent = totalPlan > 0 ? ((totalFact / totalPlan) * 100).toFixed(1) : 0;
+  const { totalFact, totalPlan, deviation, totalPercent } = useMemo(() => {
+    const fact = filtered.reduce((s, r) => {
+      const value = Number(r["Факт км"]);
+      return s + (isNaN(value) ? 0 : value);
+    }, 0);
+    
+    const plan = filtered.reduce((s, r) => {
+      const value = Number(r["План км"]);
+      return s + (isNaN(value) ? 0 : value);
+    }, 0);
+    
+    const dev = fact - plan;
+    const percent = plan > 0 ? ((fact / plan) * 100).toFixed(1) : 0;
+    
+    return {
+      totalFact: fact,
+      totalPlan: plan,
+      deviation: dev,
+      totalPercent: percent
+    };
+  }, [filtered]);
 
   // --- Charts data ---
-  const trendData = dates.map(date => {
-    const rows = allData.filter(r =>
-      r["Дата отчета"] === date &&
-      (selectedBranch === 'Все' || r["Ветка"] === selectedBranch) &&
-      (selectedContractor === 'Все' || r["Подрядчик"] === selectedContractor) &&
-      (selectedSection === 'Все' || r["Участок"] === selectedSection)
-    );
-    const f = rows.reduce((s, r) => s + (Number(r["Факт км"]) || 0), 0);
-    const p = rows.reduce((s, r) => s + (Number(r["План км"]) || 0), 0);
-    return { date, plan: +p.toFixed(1), fact: +f.toFixed(1), pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 };
-  });
+  const trendData = useMemo(() => {
+    return dates.map(date => {
+      const rows = allData.filter(r => {
+        // Проверяем дату
+        if (r["Дата отчета"] !== date) return false;
+        
+        // Проверяем ветку
+        if (selectedBranch !== 'Все' && r["Ветка"] !== selectedBranch) return false;
+        
+        // Проверяем подрядчика
+        if (selectedContractor !== 'Все' && r["Подрядчик"] !== selectedContractor) return false;
+        
+        // Проверяем участок
+        if (selectedSection !== 'Все' && r["Участок"] !== selectedSection) return false;
+        
+        return true;
+      });
+      
+      const f = rows.reduce((s, r) => {
+        const value = Number(r["Факт км"]);
+        return s + (isNaN(value) ? 0 : value);
+      }, 0);
+      
+      const p = rows.reduce((s, r) => {
+        const value = Number(r["План км"]);
+        return s + (isNaN(value) ? 0 : value);
+      }, 0);
+      
+      return { 
+        date, 
+        plan: +p.toFixed(1), 
+        fact: +f.toFixed(1), 
+        pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 
+      };
+    });
+  }, [dates, allData, selectedBranch, selectedContractor, selectedSection]);
 
-  const contractorStats = contractors.map(c => {
-    const rows = filtered.filter(r => r["Подрядчик"] === c);
-    const f = rows.reduce((s, r) => s + (Number(r["Факт км"]) || 0), 0);
-    const p = rows.reduce((s, r) => s + (Number(r["План км"]) || 0), 0);
-    return { name: c, fact: f, plan: p, pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 };
-  }).filter(c => c.fact > 0 || c.plan > 0);
+  const contractorStats = useMemo(() => {
+    return contractors.map(c => {
+      const rows = filtered.filter(r => r["Подрядчик"] === c);
+      
+      const f = rows.reduce((s, r) => {
+        const value = Number(r["Факт км"]);
+        return s + (isNaN(value) ? 0 : value);
+      }, 0);
+      
+      const p = rows.reduce((s, r) => {
+        const value = Number(r["План км"]);
+        return s + (isNaN(value) ? 0 : value);
+      }, 0);
+      
+      return { 
+        name: c, 
+        fact: f, 
+        plan: p, 
+        pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 
+      };
+    }).filter(c => c.fact > 0 || c.plan > 0);
+  }, [contractors, filtered]);
 
   const toggleDropdown = (name) => setOpenDropdown(prev => prev === name ? null : name);
 
@@ -243,6 +312,12 @@ export default function App() {
       </div>
     );
   };
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1c1d26', color: 'white', fontFamily: 'sans-serif' }}>
+      Загрузка аналитики АНТАЛ...
+    </div>
+  );
 
   return (
     <div style={{ minHeight: '100vh', background: bg, color: '#e2e8f0', padding: '30px 36px', fontFamily: 'Inter, sans-serif' }}>
@@ -428,22 +503,24 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((r, i) => {
-                    const plan = Number(r["План км"]) || 0;
-                    const fact = Number(r["Факт км"]) || 0;
-                    const dev = fact - plan;
-                    const pct = plan > 0 ? ((fact / plan) * 100).toFixed(1) : 0;
-                    return (
-                      <tr key={i} style={{ borderBottom: '1px solid #16251e' }}>
-                        <td style={{ padding: '8px', color: '#e5e7eb' }}>{r["Участок"]}</td>
-                        <td style={{ padding: '8px', color: '#9ca3af' }}>{r["Подрядчик"]}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#2898ff' }}>{plan.toFixed(1)}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#2de2a6' }}>{fact.toFixed(1)}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: dev >= 0 ? '#2de2a6' : '#ff4d4d' }}>{dev > 0 ? '+' : ''}{dev.toFixed(1)}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#ff9b45' }}>{pct}%</td>
-                      </tr>
-                    );
-                  })}
+                  {filtered
+                    .filter(r => (Number(r["План км"]) || 0) > 0 || (Number(r["Факт км"]) || 0) > 0)
+                    .map((r, i) => {
+                      const plan = Number(r["План км"]) || 0;
+                      const fact = Number(r["Факт км"]) || 0;
+                      const dev = fact - plan;
+                      const pct = plan > 0 ? ((fact / plan) * 100).toFixed(1) : 0;
+                      return (
+                        <tr key={i} style={{ borderBottom: '1px solid #16251e' }}>
+                          <td style={{ padding: '8px', color: '#e5e7eb' }}>{r["Участок"]}</td>
+                          <td style={{ padding: '8px', color: '#9ca3af' }}>{r["Подрядчик"]}</td>
+                          <td style={{ padding: '8px', textAlign: 'right', color: '#2898ff' }}>{plan.toFixed(1)}</td>
+                          <td style={{ padding: '8px', textAlign: 'right', color: '#2de2a6' }}>{fact.toFixed(1)}</td>
+                          <td style={{ padding: '8px', textAlign: 'right', color: dev >= 0 ? '#2de2a6' : '#ff4d4d' }}>{dev > 0 ? '+' : ''}{dev.toFixed(1)}</td>
+                          <td style={{ padding: '8px', textAlign: 'right', color: '#ff9b45' }}>{pct}%</td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
