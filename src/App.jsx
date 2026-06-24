@@ -33,6 +33,7 @@ export default function App() {
   const [selectedSection, setSelectedSection] = useState('Все');
   const [selectedDate, setSelectedDate] = useState('');
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [metricsData, setMetricsData] = useState([]);
 
   const tabs = [
     { id: 'construction', label: '🏗️ СМР' },
@@ -47,13 +48,42 @@ export default function App() {
     setTimeout(() => setAnimatingTab(null), 700);
   };
 
-  useEffect(() => {
-    axios.get(API_URL).then(res => {
-      const raw = res.data;
-      setAllData(Array.isArray(raw?.DB_SMR) ? raw.DB_SMR : []);
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  }, []);
+ useEffect(() => {
+  axios.get(API_URL).then(res => {
+    const raw = res.data;
+
+    // основная загрузка СМР (как было)
+    setAllData(Array.isArray(raw?.DB_SMR) ? raw.DB_SMR : []);
+
+    // --- debug + попытки обнаружить массив метрик в ответе ---
+    console.log('API response top-level keys:', Object.keys(raw || {}));
+
+    if (Array.isArray(raw?.DB_METRICS)) {
+      setMetricsData(raw.DB_METRICS);
+      console.log('metrics loaded from DB_METRICS, length=', raw.DB_METRICS.length);
+    } else if (Array.isArray(raw?.DB_PIR)) {
+      setMetricsData(raw.DB_PIR);
+      console.log('metrics loaded from DB_PIR, length=', raw.DB_PIR.length);
+    } else if (Array.isArray(raw?.METRICS)) {
+      setMetricsData(raw.METRICS);
+      console.log('metrics loaded from METRICS, length=', raw.METRICS.length);
+    } else if (Array.isArray(raw)) {
+      // если ответ — сразу массив
+      setMetricsData(raw);
+      console.log('metrics loaded from top-level array, length=', raw.length);
+    } else {
+      // fallback — используем SMR как запасной источник
+      setMetricsData(Array.isArray(raw?.DB_SMR) ? raw.DB_SMR : []);
+      console.log('metrics fallback used (DB_SMR or empty)');
+    }
+
+    setLoading(false);
+  }).catch(err => {
+    console.error('API load error', err);
+    setLoading(false);
+  });
+}, []);
+
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1c1d26', color: 'white', fontFamily: 'sans-serif' }}>
