@@ -640,196 +640,135 @@ export default function App() {
         </>
       )}
 
-      {activeTab === 'pir' && (
-  <>
-          {/* PIR/ПСД — региональный фильтр и компактная диаграмма.
-              KPI-панель вынесена выше, диаграмма уменьшена, оси и сетка скрыты,
-              тултип — тёмный (PirTooltip), столбики с закруглёнными концами. */}
+      // === ЗАМЕНИТЕ СТАРЫЙ БЛОК PIR/ПСД НА ЭТОТ БЛОК ===
 
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{ fontSize: 12, color: '#cbd5e1', marginRight: 6 }}>Режим:</div>
-
-            <button
-              onClick={() => setPirMode('psd')}
-              className={`btn-filter ${pirMode === 'psd' ? 'active' : ''}`}
-              aria-pressed={pirMode === 'psd'}
-              style={{
-                padding: '6px 12px',
-                borderRadius: 8,
-                background: pirMode === 'psd' ? '#0ea5a3' : 'transparent',
-                color: pirMode === 'psd' ? '#fff' : '#cbd5e1',
-                border: '1px solid rgba(255,255,255,0.04)',
-                cursor: 'pointer',
-              }}
-            >
-              ПСД
-            </button>
-
-            <button
-              onClick={() => setPirMode('pir')}
-              className={`btn-filter ${pirMode === 'pir' ? 'active' : ''}`}
-              aria-pressed={pirMode === 'pir'}
-              style={{
-                padding: '6px 12px',
-                borderRadius: 8,
-                background: pirMode === 'pir' ? '#0ea5a3' : 'transparent',
-                color: pirMode === 'pir' ? '#fff' : '#cbd5e1',
-                border: '1px solid rgba(255,255,255,0.04)',
-                cursor: 'pointer',
-              }}
-            >
-              ПИР
-            </button>
-          </div>
-
-          {/* KPI-панель — перемещена вверх и уменьшена по высоте (чтобы всё помещалось на один экран) */}
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
-            <div style={{ ...card, flex: 1, minWidth: 160 }}>
-              <div style={lbl}>Завершено (100%)</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#10b981' }}>{pirKPI.done} уч.</div>
-            </div>
-            <div style={{ ...card, flex: 1, minWidth: 160 }}>
-              <div style={lbl}>В разработке</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#3b82f6' }}>{pirKPI.inProgress} уч.</div>
-            </div>
-            <div style={{ ...card, flex: 1, minWidth: 160 }}>
-              <div style={lbl}>Не начато</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#9ca3af' }}>{pirKPI.notStarted} уч.</div>
-            </div>
-          </div>
-
-          {/* Conditional render: show PSD chart/table by default; if PIR mode selected show placeholder */}
-          {pirMode === 'psd' ? (
+          {activeTab === 'pir' && (
             <>
-              {/* Диаграмма: убраны оси (axisLine/tickLine) и сетка, высота уменьшена, столбики с закруглением */}
-              <div style={{ ...card, marginBottom: '12px' }}>
-                <div style={{ ...lbl, marginBottom: '8px' }}>Прогресс выполнения ПСД по участкам (%)</div>
+              {/* Кнопки ПСД / ПИР — простой стиль как у верхних вкладок (без слова "Режим") */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <button
+                  onClick={() => setPirMode('psd')}
+                  className={`bubbly-button ${pirMode === 'psd' ? 'active' : ''}`}
+                  aria-pressed={pirMode === 'psd'}
+                  style={{ padding: '6px 12px' }}
+                >
+                  ПСД
+                </button>
 
-                {(() => {
-                  const chartHeight = Math.min(pirFiltered.length * 44 + 60, 480);
-
-                  return (
-                    <div style={{ width: '100%', height: chartHeight }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          layout="vertical"
-                          data={pirFiltered}
-                          // Уменьшили left и width для колонки с названиями — график центрируется
-                          margin={{ top: 6, right: 96, left: 24, bottom: 6 }}
-                        >
-                          <defs>
-                            <linearGradient id="pirGrad" x1="0" x2="1">
-                              <stop offset="0%" stopColor="#34d399" stopOpacity={0.95} />
-                              <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.95} />
-                            </linearGradient>
-                          </defs>
-
-                          <XAxis type="number" hide />
-                          <YAxis
-                            type="category"
-                            dataKey="name"
-                            // Снизили ширину колонки, чтобы убрать большое пустое пространство слева
-                            width={220}
-                            axisLine={false}
-                            tickLine={false}
-                            // dx=0 — подписи находятся ближе к барам (не отодвинуты влево)
-                            tick={{ fontSize: 13, fill: '#cbd5e1', fontFamily: 'Inter, Arial', fontWeight: 600, dx: 0 }}
-                          />
-
-                          <Tooltip content={<PirTooltip />} wrapperStyle={{ zIndex: 9999 }} cursor={false} />
-
-                          <Bar
-                            dataKey="progress"
-                            name="Выполнение, %"
-                            barSize={18}
-                            radius={20}
-                            isAnimationActive
-                            animationDuration={900}
-                          >
-                            {pirFiltered.map((entry, idx) => {
-                              const pct = entry.progress;
-                              const fill = pct >= 100 ? '#10b981' : (pct >= 60 ? '#06b6d4' : '#60a5fa');
-                              return <Cell key={`cell-${idx}`} fill={fill} />;
-                            })}
-
-                            <LabelList
-                              dataKey="progress"
-                              position="right"
-                              formatter={(v) => `${v}%`}
-                              style={{ fill: '#ffffff', fontWeight: 900, fontSize: 13, textShadow: '0 1px 0 rgba(0,0,0,0.6)' }}
-                            />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  );
-                })()}
+                <button
+                  onClick={() => setPirMode('pir')}
+                  className={`bubbly-button ${pirMode === 'pir' ? 'active' : ''}`}
+                  aria-pressed={pirMode === 'pir'}
+                  style={{ padding: '6px 12px' }}
+                >
+                  ПИР
+                </button>
               </div>
 
-              {/* Убрали подсказку под диаграммой (строку "Подсказка: полосы показывают ...") —
-                  если хотите вернуть её, вставьте блок ниже вручную. */}
-            </>
-          ) : (
-            // Placeholder for PIR mode (in development)
-            <div style={{
-              ...card,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: 160,
-              textAlign: 'center',
-              color: '#cbd5e1',
-              marginBottom: '12px'
-            }}>
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#ffffff', marginBottom: 6 }}>ПИР — в разработке</div>
-                <div style={{ fontSize: 13, opacity: 0.85 }}>
-                  Здесь будет отдельный график и данные по ПИР. Сейчас функция в работе.
+              {/* KPI-панель остаётся как и была (если нужна) */}
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <div style={{ ...card, flex: 1, minWidth: 160 }}>
+                  <div style={lbl}>Завершено (100%)</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#10b981' }}>{pirKPI.done} уч.</div>
+                </div>
+                <div style={{ ...card, flex: 1, minWidth: 160 }}>
+                  <div style={lbl}>В разработке</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#3b82f6' }}>{pirKPI.inProgress} уч.</div>
+                </div>
+                <div style={{ ...card, flex: 1, minWidth: 160 }}>
+                  <div style={lbl}>Не начато</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#9ca3af' }}>{pirKPI.notStarted} уч.</div>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Table — оставляем всегда видимой под диаграммой/заглушкой (находится ниже KPI как просили) */}
-          <div style={card}>
-            <div style={{ ...lbl, marginBottom: '12px' }}>Детализация по участкам</div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ color: '#6b7280', textAlign: 'left', borderBottom: '1px solid #1d2d24' }}>
-                    <th style={{ padding: '8px' }}>Участок</th>
-                    <th style={{ padding: '8px' }}>Подрядчик</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>План, км</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Факт, км</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Откл, км</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>%</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered
-                    .filter(r => (toNum(r["План км"]) || 0) > 0 || (toNum(r["Факт км"]) || 0) > 0)
-                    .map((r, i) => {
-                      const plan = toNum(r["План км"]);
-                      const fact = toNum(r["Факт км"]);
-                      const dev = fact - plan;
-                      const pct = plan > 0 ? ((fact / plan) * 100).toFixed(1) : 0;
-                      return (
-                        <tr key={i} style={{ borderBottom: '1px solid #16251e' }}>
-                          <td style={{ padding: '8px', color: '#e5e7eb' }}>{r["Участок"]}</td>
-                          <td style={{ padding: '8px', color: '#9ca3af' }}>{r["Подрядчик"]}</td>
-                          <td style={{ padding: '8px', textAlign: 'right', color: '#2898ff' }}>{plan.toFixed(1)}</td>
-                          <td style={{ padding: '8px', textAlign: 'right', color: '#2de2a6' }}>{fact.toFixed(1)}</td>
-                          <td style={{ padding: '8px', textAlign: 'right', color: dev >= 0 ? '#2de2a6' : '#ff4d4d' }}>{dev > 0 ? '+' : ''}{dev.toFixed(1)}</td>
-                          <td style={{ padding: '8px', textAlign: 'right', color: '#ff9b45' }}>{pct}%</td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      )}
+              {/* Если выбран ПСД — показываем диаграмму ПСД (без таблицы) */}
+              {pirMode === 'psd' && (
+                <div style={{ ...card, marginBottom: '12px' }}>
+                  <div style={{ ...lbl, marginBottom: '8px' }}>Прогресс выполнения ПСД по участкам (%)</div>
+
+                  {(() => {
+                    const chartHeight = Math.min(pirFiltered.length * 44 + 60, 480);
+
+                    return (
+                      <div style={{ width: '100%', height: chartHeight }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            layout="vertical"
+                            data={pirFiltered}
+                            margin={{ top: 6, right: 96, left: 24, bottom: 6 }}
+                          >
+                            <defs>
+                              <linearGradient id="pirGrad" x1="0" x2="1">
+                                <stop offset="0%" stopColor="#34d399" stopOpacity={0.95} />
+                                <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.95} />
+                              </linearGradient>
+                            </defs>
+
+                            <XAxis type="number" hide />
+                            <YAxis
+                              type="category"
+                              dataKey="name"
+                              width={220}
+                              axisLine={false}
+                              tickLine={false}
+                              tick={{ fontSize: 13, fill: '#cbd5e1', fontFamily: 'Inter, Arial', fontWeight: 600, dx: 0 }}
+                            />
+
+                            <Tooltip content={<PirTooltip />} wrapperStyle={{ zIndex: 9999 }} cursor={false} />
+
+                            <Bar
+                              dataKey="progress"
+                              name="Выполнение, %"
+                              barSize={18}
+                              radius={20}
+                              isAnimationActive
+                              animationDuration={900}
+                            >
+                              {pirFiltered.map((entry, idx) => {
+                                const pct = entry.progress;
+                                const fill = pct >= 100 ? '#10b981' : (pct >= 60 ? '#06b6d4' : '#60a5fa');
+                                return <Cell key={`cell-${idx}`} fill={fill} />;
+                              })}
+
+                              <LabelList
+                                dataKey="progress"
+                                position="right"
+                                formatter={(v) => `${v}%`}
+                                style={{ fill: '#ffffff', fontWeight: 900, fontSize: 13, textShadow: '0 1px 0 rgba(0,0,0,0.6)' }}
+                              />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Если выбран ПИР — оставляем только карточку "в разработке" (никаких таблиц/диаграмм) */}
+              {pirMode === 'pir' && (
+                <div style={{
+                  ...card,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: 160,
+                  textAlign: 'center',
+                  color: '#cbd5e1',
+                  marginBottom: '12px'
+                }}>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: '#ffffff', marginBottom: 6 }}>ПИР — в разработке</div>
+                    <div style={{ fontSize: 13, opacity: 0.85 }}>
+                      Здесь будет отдельный график и данные по ПИР. Сейчас функция в работе.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* УДАЛЕНО: таблица "Детализация по участкам" для вкладки PIR — оставлена только в СМР и МЕТРИКИ */}
+            </>
+          )}
 
       {activeTab === 'schedule' && (
         <>
