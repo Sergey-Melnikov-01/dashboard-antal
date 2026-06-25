@@ -669,73 +669,68 @@ export default function App() {
 
           {/* Диаграмма: убраны оси (axisLine/tickLine) и сетка, высота уменьшена, столбики с закруглением */}
           <div style={{ ...card, marginBottom: '12px' }}>
-            <div style={{ ...lbl, marginBottom: '8px' }}>Прогресс выполнения ПСД по участкам (%)</div>
+          <div style={{ ...lbl, marginBottom: '8px' }}>Прогресс выполнения ПСД по участкам (%)</div>
 
-            {(() => {
-              // уменьшенная высота: все влезет на один экран; но держим динамический размер по количеству
-              const chartHeight = Math.min(pirFiltered.length * 44 + 60, 480);
+          {(() => {
+            const chartHeight = Math.min(pirFiltered.length * 44 + 60, 480);
 
-              return (
-                <div style={{ width: '100%', height: chartHeight }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      layout="vertical"
-                      data={pirFiltered}
-                      // Увеличили правый отступ, чтобы метки процентов всегда помещались
-                      margin={{ top: 6, right: 96, left: 12, bottom: 6 }}
+            return (
+              <div style={{ width: '100%', height: chartHeight }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    layout="vertical"
+                    data={pirFiltered}
+                    // Уменьшили left и width для колонки с названиями — график центрируется
+                    margin={{ top: 6, right: 96, left: 24, bottom: 6 }}
+                  >
+                    <defs>
+                      <linearGradient id="pirGrad" x1="0" x2="1">
+                        <stop offset="0%" stopColor="#34d399" stopOpacity={0.95} />
+                        <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.95} />
+                      </linearGradient>
+                    </defs>
+
+                    <XAxis type="number" hide />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      // Снизили ширину колонки, чтобы убрать большое пустое пространство слева
+                      width={220}
+                      axisLine={false}
+                      tickLine={false}
+                      // dx=0 — подписи находятся ближе к барам (не отодвинуты влево)
+                      tick={{ fontSize: 13, fill: '#cbd5e1', fontFamily: 'Inter, Arial', fontWeight: 600, dx: 0 }}
+                    />
+
+                    <Tooltip content={<PirTooltip />} wrapperStyle={{ zIndex: 9999 }} cursor={false} />
+
+                    <Bar
+                      dataKey="progress"
+                      name="Выполнение, %"
+                      barSize={18}
+                      radius={20}
+                      isAnimationActive
+                      animationDuration={900}
                     >
-                      {/* gradient definition (optional, used for smooth look when Cell doesn't override) */}
-                      <defs>
-                        <linearGradient id="pirGrad" x1="0" x2="1">
-                          <stop offset="0%" stopColor="#34d399" stopOpacity={0.95} />
-                          <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.95} />
-                        </linearGradient>
-                      </defs>
+                      {pirFiltered.map((entry, idx) => {
+                        const pct = entry.progress;
+                        const fill = pct >= 100 ? '#10b981' : (pct >= 60 ? '#06b6d4' : '#60a5fa');
+                        return <Cell key={`cell-${idx}`} fill={fill} />;
+                      })}
 
-                      {/* Оси скрыты, но подписи участков оставлены без линий */}
-                      <XAxis type="number" hide />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        width={300}
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 13, fill: '#cbd5e1', fontFamily: 'Inter, Arial', fontWeight: 600, dx: -14 }}
-                      />
-
-                      {/* Обновленный Tooltip с cursor={false} для удаления белой заливки при наведении */}
-                      <Tooltip 
-                        content={<PirTooltip />} 
-                        wrapperStyle={{ zIndex: 9999 }} 
-                        cursor={false} 
-                      />
-
-                      <Bar
+                      <LabelList
                         dataKey="progress"
-                        name="Выполнение, %"
-                        barSize={18}
-                        radius={20} // закруглённые концы
-                        isAnimationActive
-                        animationDuration={900}
-                      >
-                        {pirFiltered.map((entry, idx) => {
-                          // плавная градация цвета: полностью зеленые — 100%, иначе слегка другой цвет
-                          const pct = entry.progress;
-                          const fill = pct >= 100 ? '#10b981' : (pct >= 60 ? '#06b6d4' : '#60a5fa');
-                          return <Cell key={`cell-${idx}`} fill={fill} />;
-                        })}
-                        <LabelList dataKey="progress"
-                            position="right"
-                            formatter={(v) => `${v}%`}
-                            style={{ fill: '#ffffff', fontWeight: 900, fontSize: 13, textShadow: '0 1px 0 rgba(0,0,0,0.6)' }}
-                          />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              );
-            })()}
-          </div>
+                        position="right"
+                        formatter={(v) => `${v}%`}
+                        style={{ fill: '#ffffff', fontWeight: 900, fontSize: 13, textShadow: '0 1px 0 rgba(0,0,0,0.6)' }}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            );
+          })()}
+        </div>
 
           {/* Убрали подсказку под диаграммой (строку "Подсказка: полосы показывают ...") —
               если хотите вернуть её, вставьте блок ниже вручную. */}
