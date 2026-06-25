@@ -188,7 +188,7 @@ export default function App() {
     });
   }, [metricsData, metricActiveDate, selectedBranch, selectedContractor, selectedSection]);
 
-  // KPI for metrics
+  // KPI for metrics — now includes pct for all groups
   const metricsKPI = useMemo(() => {
     const cablePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель План"]), 0);
     const cableFact = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель Факт"]), 0);
@@ -199,14 +199,18 @@ export default function App() {
     const hddPlan = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ План"]), 0);
     const hddFact = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ Факт"]), 0);
     const cablePct = cablePlan > 0 ? ((cableFact / cablePlan) * 100).toFixed(1) : 0;
+    const pipePct = pipePlan > 0 ? ((pipeFact / pipePlan) * 100).toFixed(1) : 0;
+    const backfillPct = backfillPlan > 0 ? ((backfillFact / backfillPlan) * 100).toFixed(1) : 0;
+    const hddPct = hddPlan > 0 ? ((hddFact / hddPlan) * 100).toFixed(1) : 0;
     return {
       cablePlan, cableFact, cablePct,
-      pipePlan, pipeFact,
-      backfillPlan, backfillFact,
-      hddPlan, hddFact
+      pipePlan, pipeFact, pipePct,
+      backfillPlan, backfillFact, backfillPct,
+      hddPlan, hddFact, hddPct
     };
   }, [metricsFiltered]);
 
+  // keep these for potential future use (not displayed now)
   const metricsTrend = useMemo(() => {
     return metricsDates.map(date => {
       const rows = metricsData.filter(r => {
@@ -378,7 +382,7 @@ export default function App() {
 
       {activeTab === 'construction' && (
         <>
-          {/* Filters (construction uses precomputed lists) */}
+          {/* ... (оставил без изменений) */}
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px', alignItems: 'flex-start' }} onClick={e => { if (e.target === e.currentTarget) setOpenDropdown(null); }}>
             <PushDropdown
               name="branch"
@@ -428,7 +432,7 @@ export default function App() {
             ))}
           </div>
 
-          {/* Charts row */}
+          {/* Charts row (unchanged) */}
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '16px' }}>
             {/* Trend */}
             <div style={card}>
@@ -594,59 +598,105 @@ export default function App() {
             />
           </div>
 
-          {/* Metrics KPI row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '16px' }}>
-            {[
-              { label: 'Кабель (план)', val: metricsKPI.cablePlan.toFixed(1), unit: 'м', color: '#2898ff' },
-              { label: 'Кабель (факт)', val: metricsKPI.cableFact.toFixed(1), unit: 'м', color: '#2de2a6' },
-              { label: 'Выполнение кабеля', val: (metricsKPI.cablePct || 0), unit: '%', color: '#ff9b45' },
-              { label: 'Труба (факт)', val: metricsKPI.pipeFact.toFixed(1), unit: 'м', color: '#ff9b45' },
-            ].map((kpi, i) => (
-              <div key={i} style={card}>
-                <div style={lbl}>{kpi.label}</div>
-                <div style={{ fontSize: '22px', fontWeight: 'bold', color: kpi.color }}>
-                  {kpi.val} <span style={{ fontSize: '12px', opacity: 0.6 }}>{kpi.unit}</span>
+          {/* NEW: KPI groups laid out in chronology (Cable -> Pipe) in first block,
+              then Backfill group, then HDD group. Each group shows Plan / Fact / %.
+              Pipe values shown under Cable values as requested. */}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
+            {/* Column 1: Plan (Cable top, Pipe below) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ ...card }}>
+                <div style={lbl}>Кабель (план)</div>
+                <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2898ff' }}>
+                  {metricsKPI.cablePlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
                 </div>
               </div>
-            ))}
-          </div>
-
-          {/* Charts: trend and section bars */}
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div style={card}>
-              <div style={lbl}>Динамика прокладки кабеля (м)</div>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={metricsTrend} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" />
-                  <XAxis dataKey="date" stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
-                  <YAxis stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
-                  <Tooltip contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12 }} />
-                  <Line type="monotone" dataKey="cablePlan" stroke="#2898ff" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="cableFact" stroke="#2de2a6" strokeWidth={2} dot={{ r: 3, fill: '#2de2a6' }} />
-                </LineChart>
-              </ResponsiveContainer>
+              <div style={{ ...card }}>
+                <div style={lbl}>Труба (план)</div>
+                <div style={{ fontSize: '18px', fontWeight: '700', color: '#2898ff' }}>
+                  {metricsKPI.pipePlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                </div>
+              </div>
             </div>
 
-            <div style={card}>
-              <div style={lbl}>Кабель по участкам (м)</div>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={metricsSectionBars} margin={{ top: 35, right: 10, left: 10, bottom: 5 }} barGap={4}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" />
-                  <XAxis dataKey="section" tick={{ fill: '#9ca3af' }} stroke="#4b5563" />
-                  <YAxis tick={{ fill: '#9ca3af' }} stroke="#4b5563" />
-                  <Tooltip contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 11 }} />
-                  <Bar dataKey="cablePlan" fill="#2898ff" radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="cablePlan" position="top" style={{ fill: '#2898ff', fontSize: 11, fontWeight: 'bold' }} formatter={(v) => v > 0 ? v : ''} />
-                  </Bar>
-                  <Bar dataKey="cableFact" fill="#2de2a6" radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="cableFact" position="top" style={{ fill: '#2de2a6', fontSize: 11, fontWeight: 'bold' }} formatter={(v) => v > 0 ? v : ''} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            {/* Column 2: Fact (Cable top, Pipe below) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ ...card }}>
+                <div style={lbl}>Кабель (факт)</div>
+                <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2de2a6' }}>
+                  {metricsKPI.cableFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                </div>
+              </div>
+              <div style={{ ...card }}>
+                <div style={lbl}>Труба (факт)</div>
+                <div style={{ fontSize: '18px', fontWeight: '700', color: '#2de2a6' }}>
+                  {metricsKPI.pipeFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Column 3: Percent (Cable top, Pipe below) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ ...card }}>
+                <div style={lbl}>Выполнение кабеля</div>
+                <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#ff9b45' }}>
+                  {metricsKPI.cablePct || 0} <span style={{ fontSize: '12px', opacity: 0.6 }}>%</span>
+                </div>
+              </div>
+              <div style={{ ...card }}>
+                <div style={lbl}>Выполнение трубы</div>
+                <div style={{ fontSize: '18px', fontWeight: '700', color: '#ff9b45' }}>
+                  {metricsKPI.pipePct || 0} <span style={{ fontSize: '12px', opacity: 0.6 }}>%</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Metrics table */}
+          {/* Next: Backfill group (Засыпка) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
+            <div style={card}>
+              <div style={lbl}>Засыпка (план)</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2898ff' }}>
+                {metricsKPI.backfillPlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+              </div>
+            </div>
+            <div style={card}>
+              <div style={lbl}>Засыпка (факт)</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2de2a6' }}>
+                {metricsKPI.backfillFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+              </div>
+            </div>
+            <div style={card}>
+              <div style={lbl}>Выполнение засыпки</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ff9b45' }}>
+                {metricsKPI.backfillPct || 0} <span style={{ fontSize: '12px', opacity: 0.6 }}>%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Next: HDD group (ГНБ) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
+            <div style={card}>
+              <div style={lbl}>ГНБ (план)</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2898ff' }}>
+                {metricsKPI.hddPlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+              </div>
+            </div>
+            <div style={card}>
+              <div style={lbl}>ГНБ (факт)</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2de2a6' }}>
+                {metricsKPI.hddFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+              </div>
+            </div>
+            <div style={card}>
+              <div style={lbl}>Выполнение ГНБ</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ff9b45' }}>
+                {metricsKPI.hddPct || 0} <span style={{ fontSize: '12px', opacity: 0.6 }}>%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Table — сразу под KPI, как просили */}
           <div style={card}>
             <div style={{ ...lbl, marginBottom: '12px' }}>Метрики — детализация по участкам</div>
             <div style={{ overflowX: 'auto' }}>
