@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
-  LineChart, Line
+  LineChart, Line, Cell
 } from 'recharts';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbw6XLjGzrrzg4knwf9QQ62zgv5jnKxvzZnZKhLUTSFX14b2dqa_iJZn2y5GjzPBgkH3/exec";
@@ -25,6 +25,7 @@ const toNum = v => {
 export default function App() {
   const [allData, setAllData] = useState([]);
   const [metricsData, setMetricsData] = useState([]);
+  const [pirData, setPirData] = useState([]); // <-- added state for DB_PIR
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('construction'); // 'construction' | 'schedule' (metrics)
   const [animatingTab, setAnimatingTab] = useState(null);
@@ -35,6 +36,9 @@ export default function App() {
   const [selectedSection, setSelectedSection] = useState('Все');
   const [selectedDate, setSelectedDate] = useState('');
   const [openDropdown, setOpenDropdown] = useState(null);
+
+  // PIR-specific region filter
+  const [selectedPirRegion, setSelectedPirRegion] = useState('Все');
 
   const tabs = [
     { id: 'construction', label: '🏗️ СМР' },
@@ -68,6 +72,9 @@ export default function App() {
         setMetricsData([]);
         console.log('No DB_METRIC found — metricsData empty');
       }
+
+      // PIR data (if present in payload)
+      setPirData(Array.isArray(raw?.DB_PIR) ? raw.DB_PIR : []);
 
       setLoading(false);
     }).catch(err => {
@@ -189,29 +196,29 @@ export default function App() {
   }, [metricsData, metricActiveDate, selectedBranch, selectedContractor, selectedSection]);
 
   // KPI for metrics — now includes pct for all groups
-const metricsKPI = useMemo(() => {
-  const cablePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель План"]), 0);
-  const cableFact = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель Факт"]), 0);
-  const pipePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Труба План"]), 0);
-  const pipeFact = metricsFiltered.reduce((s, r) => s + toNum(r["Труба Факт"]), 0);
-  const backfillPlan = metricsFiltered.reduce((s, r) => s + toNum(r["Засыпка План"]), 0);
-  const backfillFact = metricsFiltered.reduce((s, r) => s + toNum(r["Засыпка Факт"]), 0);
-  const hddPlan = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ План"]), 0);
-  const hddFact = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ Факт"]), 0);
+  const metricsKPI = useMemo(() => {
+    const cablePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель План"]), 0);
+    const cableFact = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель Факт"]), 0);
+    const pipePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Труба План"]), 0);
+    const pipeFact = metricsFiltered.reduce((s, r) => s + toNum(r["Труба Факт"]), 0);
+    const backfillPlan = metricsFiltered.reduce((s, r) => s + toNum(r["Засыпка План"]), 0);
+    const backfillFact = metricsFiltered.reduce((s, r) => s + toNum(r["Засыпка Факт"]), 0);
+    const hddPlan = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ План"]), 0);
+    const hddFact = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ Факт"]), 0);
 
-  // Отклонения (метры): fact - plan
-  const cableDev = +((cableFact - cablePlan).toFixed(1));
-  const pipeDev = +((pipeFact - pipePlan).toFixed(1));
-  const backfillDev = +((backfillFact - backfillPlan).toFixed(1));
-  const hddDev = +((hddFact - hddPlan).toFixed(1));
+    // Отклонения (метры): fact - plan
+    const cableDev = +((cableFact - cablePlan).toFixed(1));
+    const pipeDev = +((pipeFact - pipePlan).toFixed(1));
+    const backfillDev = +((backfillFact - backfillPlan).toFixed(1));
+    const hddDev = +((hddFact - hddPlan).toFixed(1));
 
-  return {
-    cablePlan, cableFact, cableDev,
-    pipePlan, pipeFact, pipeDev,
-    backfillPlan, backfillFact, backfillDev,
-    hddPlan, hddFact, hddDev
-  };
-}, [metricsFiltered]);
+    return {
+      cablePlan, cableFact, cableDev,
+      pipePlan, pipeFact, pipeDev,
+      backfillPlan, backfillFact, backfillDev,
+      hddPlan, hddFact, hddDev
+    };
+  }, [metricsFiltered]);
 
   // keep these for potential future use (not displayed now)
   const metricsTrend = useMemo(() => {
@@ -240,6 +247,43 @@ const metricsKPI = useMemo(() => {
     });
     return Object.values(map).sort((a, b) => b.cablePlan + b.cableFact - (a.cablePlan + a.cableFact));
   }, [metricsFiltered]);
+
+  // -----------------------------
+  // PIR (DB_PIR) — new section (one chart + region filter)
+  // -----------------------------
+  const pirRegions = useMemo(() => {
+    return [...new Set((pirData || []).map(r => r["Регион"]).filter(Boolean))].sort();
+  }, [pirData]);
+
+  const pirProcessed = useMemo(() => {
+    if (!Array.isArray(pirData) || pirData.length === 0) return [];
+    return pirData
+      .map(r => {
+        const name = r["Участок"] ?? r["Участок  "] ?? r["Участок "] ?? '';
+        const region = r["Регион"] ?? 'Не указан';
+        const rawPct = r["% ПСД"] ?? r["%ПСД"] ?? r["% ПСД "] ?? r["% ПСД  "] ?? '';
+        const pct = Number(String(rawPct).toString().replace(',', '.')) || 0;
+        const status = r["Статус ПСД"] ?? '';
+        return { name: String(name).trim(), region: String(region).trim(), progress: pct, status };
+      })
+      .filter(x => x.name);
+  }, [pirData]);
+
+  const pirFiltered = useMemo(() => {
+    const arr = pirProcessed.slice();
+    const filteredArr = selectedPirRegion && selectedPirRegion !== 'Все'
+      ? arr.filter(r => (r.region || '').toLowerCase().includes(selectedPirRegion.toLowerCase()))
+      : arr;
+    filteredArr.sort((a, b) => b.progress - a.progress || a.name.localeCompare(b.name));
+    return filteredArr;
+  }, [pirProcessed, selectedPirRegion]);
+
+  const pirKPI = useMemo(() => {
+    const done = pirFiltered.filter(d => d.progress >= 100).length;
+    const inProgress = pirFiltered.filter(d => d.progress > 0 && d.progress < 100).length;
+    const notStarted = pirFiltered.filter(d => d.progress <= 0).length;
+    return { done, inProgress, notStarted };
+  }, [pirFiltered]);
 
   const toggleDropdown = (name) => setOpenDropdown(prev => prev === name ? null : name);
 
@@ -566,6 +610,95 @@ const metricsKPI = useMemo(() => {
         </>
       )}
 
+      {activeTab === 'pir' && (
+        <>
+          {/* PIR/ПСД — один фильтр по регионам и большая горизонтальная диаграмма */}
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px', alignItems: 'flex-start' }} onClick={e => { if (e.target === e.currentTarget) setOpenDropdown(null); }}>
+            <PushDropdown
+              name="pir_region"
+              label="Регион"
+              value={selectedPirRegion}
+              options={pirRegions}
+              onChange={v => { setSelectedPirRegion(v); }}
+              onReset=""
+            />
+          </div>
+
+          <div style={{ ...card, marginBottom: '16px' }}>
+            <div style={{ ...lbl, marginBottom: '12px' }}>Прогресс выполнения ПСД по участкам (%)</div>
+            <div style={{ width: '100%', height: Math.min(pirFiltered.length * 46 + 90, 900) }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  layout="vertical"
+                  data={pirFiltered}
+                  margin={{ top: 5, right: 60, left: 40, bottom: 5 }}
+                >
+                  <defs>
+                    <linearGradient id="pirGrad" x1="0" x2="1">
+                      <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.9} />
+                      <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.9} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                  <XAxis type="number" domain={[0, 100]} hide />
+                  <YAxis type="category" dataKey="name" width={200} tick={{ fontSize: 13 }} />
+                  <Tooltip
+                    cursor={{ fill: '#f9fafb' }}
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const d = payload[0].payload;
+                        return (
+                          <div className="bg-white p-3 border border-gray-100 shadow rounded" style={{ background: '#0f1724', color: '#e2e8f0', padding: 12, borderRadius: 8 }}>
+                            <div style={{ fontWeight: 700, marginBottom: 6 }}>{d.name}</div>
+                            <div style={{ color: '#9ca3af', fontSize: 13 }}>Регион: {d.region}</div>
+                            <div style={{ color: '#2de2a6', fontWeight: 700, marginTop: 6 }}>Готовность: {d.progress}%</div>
+                            {d.status ? <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 6 }}>Статус: {d.status}</div> : null}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar
+                    dataKey="progress"
+                    name="Выполнение, %"
+                    radius={[0, 6, 6, 0]}
+                    barSize={22}
+                    isAnimationActive
+                    animationDuration={1100}
+                  >
+                    {pirFiltered.map((entry, idx) => {
+                      const pct = entry.progress;
+                      const fill = pct >= 100 ? '#10b981' : pct >= 50 ? '#3b82f6' : '#8b5cf6';
+                      return <Cell key={`cell-${idx}`} fill={fill} />;
+                    })}
+                    <LabelList dataKey="progress" position="right" formatter={(v) => `${v}%`} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ marginTop: 12, color: '#94a3b8', fontSize: 13 }}>
+              Подсказка: полосы показывают процент выполнения (колонка "% ПСД"). Если план не указан, значение отображается как 0%.
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+            <div style={{ p: 12, padding: 12, background: '#052e19', borderRadius: 12, border: '1px solid rgba(16,185,129,0.08)', textAlign: 'center' }}>
+              <div style={{ color: '#10b981', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Завершено (100%)</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#10b981' }}>{pirKPI.done} уч.</div>
+            </div>
+            <div style={{ p: 12, padding: 12, background: '#0b1732', borderRadius: 12, border: '1px solid rgba(59,130,246,0.06)', textAlign: 'center' }}>
+              <div style={{ color: '#3b82f6', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>В разработке</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#3b82f6' }}>{pirKPI.inProgress} уч.</div>
+            </div>
+            <div style={{ p: 12, padding: 12, background: '#111827', borderRadius: 12, border: '1px solid rgba(255,255,255,0.03)', textAlign: 'center' }}>
+              <div style={{ color: '#9ca3af', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Не начато</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#9ca3af' }}>{pirKPI.notStarted} уч.</div>
+            </div>
+          </div>
+        </>
+      )}
+
       {activeTab === 'schedule' && (
         <>
           {/* FILTERS for METRICS (same UI components, but options from metrics) */}
@@ -750,7 +883,7 @@ const metricsKPI = useMemo(() => {
         </>
       )}
 
-      {activeTab !== 'construction' && activeTab !== 'schedule' && (
+      {activeTab !== 'construction' && activeTab !== 'schedule' && activeTab !== 'pir' && (
         <div style={{ ...card, alignItems: 'center', justifyContent: 'center', minHeight: '300px', textAlign: 'center' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#2de2a6', marginBottom: '8px' }}>В разработке</div>
