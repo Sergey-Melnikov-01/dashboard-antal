@@ -131,8 +131,9 @@ export default function App() {
     )];
   }, [allData, selectedBranch, selectedContractor]);
 
-  const latestDate = dates[dates.length - 1];
-  const activeDate = selectedDate && dates.includes(selectedDate) ? selectedDate : latestDate;
+  
+  const latestDate = dates.length ? dates[dates.length - 1] : '';
+  const activeDate = selectedDate && dates.includes(selectedDate) ? selectedDate : (latestDate || '');
 
   const filtered = useMemo(() => {
     return allData.filter(r => {
@@ -186,9 +187,8 @@ export default function App() {
       .sort((a, b) => parseDate(a) - parseDate(b));
   }, [metricsData]);
 
-  const metricsLatestDate = metricsDates[metricsDates.length - 1];
-  // if global selectedDate exists in metricsDates, use it; else fall back to metricsLatestDate
-  const metricActiveDate = selectedDate && metricsDates.includes(selectedDate) ? selectedDate : metricsLatestDate;
+  const metricsLatestDate = metricsDates.length ? metricsDates[metricsDates.length - 1] : '';
+  const metricActiveDate = selectedDate && metricsDates.includes(selectedDate) ? selectedDate : (metricsLatestDate || '');
 
   const metricsBranches = useMemo(() => {
     return [...new Set(metricsData.map(r => r["Ветка"]).filter(Boolean))];
@@ -396,7 +396,7 @@ export default function App() {
           <div className="push-dropdown-menu">
             <div
               className={`push-dropdown-item ${!value || value === 'Все' || value === '' ? 'selected' : ''}`}
-              onClick={() => { onChange(onReset || 'Все'); setOpenDropdown(null); }}
+              onClick={() => { onChange(onReset !== undefined ? onReset : 'Все'); setOpenDropdown(null); }}
             >
               {`Все ${label.toLowerCase()}`}
             </div>
@@ -634,9 +634,13 @@ export default function App() {
       )}
 
       {activeTab === 'pir' && (
-        <>
-          {/* PIR/ПСД — один фильтр по регионам и большая горизонтальная диаграмма */}
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px', alignItems: 'flex-start' }} onClick={e => { if (e.target === e.currentTarget) setOpenDropdown(null); }}>
+  <>
+          {/* PIR/ПСД — региональный фильтр и компактная диаграмма.
+              KPI-панель вынесена выше, диаграмма уменьшена, оси и сетка скрыты,
+              тултип — тёмный (PirTooltip), столбики с закруглёнными концами. */}
+
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '12px', alignItems: 'flex-start' }}
+              onClick={e => { if (e.target === e.currentTarget) setOpenDropdown(null); }}>
             <PushDropdown
               name="pir_region"
               label="Регион"
@@ -647,78 +651,89 @@ export default function App() {
             />
           </div>
 
-          <div style={{ ...card, marginBottom: '16px' }}>
-            <div style={{ ...lbl, marginBottom: '12px' }}>Прогресс выполнения ПСД по участкам (%)</div>
-            <div style={{ width: '100%', height: Math.min(pirFiltered.length * 46 + 90, 900) }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  layout="vertical"
-                  data={pirFiltered}
-                  margin={{ top: 5, right: 60, left: 40, bottom: 5 }}
-                >
-                  <defs>
-                    <linearGradient id="pirGrad" x1="0" x2="1">
-                      <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.9} />
-                      <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.9} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-                  <XAxis type="number" domain={[0, 100]} hide />
-                  <YAxis type="category" dataKey="name" width={200} tick={{ fontSize: 13 }} />
-                  <Tooltip
-                    cursor={{ fill: '#f9fafb' }}
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        const d = payload[0].payload;
-                        return (
-                          <div className="bg-white p-3 border border-gray-100 shadow rounded" style={{ background: '#0f1724', color: '#e2e8f0', padding: 12, borderRadius: 8 }}>
-                            <div style={{ fontWeight: 700, marginBottom: 6 }}>{d.name}</div>
-                            <div style={{ color: '#9ca3af', fontSize: 13 }}>Регион: {d.region}</div>
-                            <div style={{ color: '#2de2a6', fontWeight: 700, marginTop: 6 }}>Готовность: {d.progress}%</div>
-                            {d.status ? <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 6 }}>Статус: {d.status}</div> : null}
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Bar
-                    dataKey="progress"
-                    name="Выполнение, %"
-                    radius={[0, 6, 6, 0]}
-                    barSize={22}
-                    isAnimationActive
-                    animationDuration={1100}
-                  >
-                    {pirFiltered.map((entry, idx) => {
-                      const pct = entry.progress;
-                      const fill = pct >= 100 ? '#10b981' : pct >= 50 ? '#3b82f6' : '#8b5cf6';
-                      return <Cell key={`cell-${idx}`} fill={fill} />;
-                    })}
-                    <LabelList dataKey="progress" position="right" formatter={(v) => `${v}%`} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+          {/* KPI-панель — перемещена вверх и уменьшена по высоте (чтобы всё помещалось на один экран) */}
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+            <div style={{ ...card, flex: 1, minWidth: 160 }}>
+              <div style={lbl}>Завершено (100%)</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#10b981' }}>{pirKPI.done} уч.</div>
             </div>
-            <div style={{ marginTop: 12, color: '#94a3b8', fontSize: 13 }}>
-              Подсказка: полосы показывают процент выполнения (колонка "% ПСД"). Если план не указан, значение отображается как 0%.
+            <div style={{ ...card, flex: 1, minWidth: 160 }}>
+              <div style={lbl}>В разработке</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#3b82f6' }}>{pirKPI.inProgress} уч.</div>
+            </div>
+            <div style={{ ...card, flex: 1, minWidth: 160 }}>
+              <div style={lbl}>Не начато</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#9ca3af' }}>{pirKPI.notStarted} уч.</div>
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-            <div style={{ p: 12, padding: 12, background: '#052e19', borderRadius: 12, border: '1px solid rgba(16,185,129,0.08)', textAlign: 'center' }}>
-              <div style={{ color: '#10b981', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Завершено (100%)</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#10b981' }}>{pirKPI.done} уч.</div>
-            </div>
-            <div style={{ p: 12, padding: 12, background: '#0b1732', borderRadius: 12, border: '1px solid rgba(59,130,246,0.06)', textAlign: 'center' }}>
-              <div style={{ color: '#3b82f6', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>В разработке</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#3b82f6' }}>{pirKPI.inProgress} уч.</div>
-            </div>
-            <div style={{ p: 12, padding: 12, background: '#111827', borderRadius: 12, border: '1px solid rgba(255,255,255,0.03)', textAlign: 'center' }}>
-              <div style={{ color: '#9ca3af', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Не начато</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#9ca3af' }}>{pirKPI.notStarted} уч.</div>
-            </div>
+          {/* Диаграмма: убраны оси (axisLine/tickLine) и сетка, высота уменьшена, столбики с закруглением */}
+          <div style={{ ...card, marginBottom: '12px' }}>
+            <div style={{ ...lbl, marginBottom: '8px' }}>Прогресс выполнения ПСД по участкам (%)</div>
+
+            {(() => {
+              // уменьшенная высота: все влезет на один экран; но держим динамический размер по количеству
+              const chartHeight = Math.min(pirFiltered.length * 44 + 60, 480);
+
+              return (
+                <div style={{ width: '100%', height: chartHeight }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      layout="vertical"
+                      data={pirFiltered}
+                      margin={{ top: 6, right: 36, left: 12, bottom: 6 }}
+                    >
+                      {/* gradient definition (optional, used for smooth look when Cell doesn't override) */}
+                      <defs>
+                        <linearGradient id="pirGrad" x1="0" x2="1">
+                          <stop offset="0%" stopColor="#34d399" stopOpacity={0.95} />
+                          <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.95} />
+                        </linearGradient>
+                      </defs>
+
+                      {/* Оси скрыты, но подписи участков оставлены без линий */}
+                      <XAxis type="number" hide />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        width={220}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 13, fill: '#cbd5e1', fontFamily: 'Inter, Arial', fontWeight: 600 }}
+                      />
+
+                      {/* Обновленный Tooltip с cursor={false} для удаления белой заливки при наведении */}
+                      <Tooltip 
+                        content={<PirTooltip />} 
+                        wrapperStyle={{ zIndex: 9999 }} 
+                        cursor={false} 
+                      />
+
+                      <Bar
+                        dataKey="progress"
+                        name="Выполнение, %"
+                        barSize={18}
+                        radius={20} // закруглённые концы
+                        isAnimationActive
+                        animationDuration={900}
+                      >
+                        {pirFiltered.map((entry, idx) => {
+                          // плавная градация цвета: полностью зеленые — 100%, иначе слегка другой цвет
+                          const pct = entry.progress;
+                          const fill = pct >= 100 ? '#10b981' : (pct >= 60 ? '#06b6d4' : '#60a5fa');
+                          return <Cell key={`cell-${idx}`} fill={fill} />;
+                        })}
+                        <LabelList dataKey="progress" position="right" formatter={(v) => `${v}%`} style={{ fill: '#e6f9f0', fontWeight: 800 }} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              );
+            })()}
           </div>
+
+          {/* Убрали подсказку под диаграммой (строку "Подсказка: полосы показывают ...") —
+              если хотите вернуть её, вставьте блок ниже вручную. */}
         </>
       )}
 
