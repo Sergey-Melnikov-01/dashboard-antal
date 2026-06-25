@@ -681,7 +681,8 @@ export default function App() {
                     <BarChart
                       layout="vertical"
                       data={pirFiltered}
-                      margin={{ top: 6, right: 36, left: 12, bottom: 6 }}
+                      // Увеличили правый отступ, чтобы метки процентов всегда помещались
+                      margin={{ top: 6, right: 96, left: 12, bottom: 6 }}
                     >
                       {/* gradient definition (optional, used for smooth look when Cell doesn't override) */}
                       <defs>
@@ -696,10 +697,10 @@ export default function App() {
                       <YAxis
                         type="category"
                         dataKey="name"
-                        width={220}
+                        width={300}
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fontSize: 13, fill: '#cbd5e1', fontFamily: 'Inter, Arial', fontWeight: 600 }}
+                        tick={{ fontSize: 13, fill: '#cbd5e1', fontFamily: 'Inter, Arial', fontWeight: 600, dx: -14 }}
                       />
 
                       {/* Обновленный Tooltip с cursor={false} для удаления белой заливки при наведении */}
@@ -723,7 +724,11 @@ export default function App() {
                           const fill = pct >= 100 ? '#10b981' : (pct >= 60 ? '#06b6d4' : '#60a5fa');
                           return <Cell key={`cell-${idx}`} fill={fill} />;
                         })}
-                        <LabelList dataKey="progress" position="right" formatter={(v) => `${v}%`} style={{ fill: '#e6f9f0', fontWeight: 800 }} />
+                        <LabelList dataKey="progress"
+                            position="right"
+                            formatter={(v) => `${v}%`}
+                            style={{ fill: '#ffffff', fontWeight: 900, fontSize: 13, textShadow: '0 1px 0 rgba(0,0,0,0.6)' }}
+                          />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
