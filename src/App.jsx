@@ -96,7 +96,7 @@ export default function App() {
     return [...new Set(
       allData
         .filter(r => (selectedBranch === 'Все' || r["Ветка"] === selectedBranch) &&
-                     (selectedContractor === 'Все' || r["Подрядчик"] === selectedContractor))
+          (selectedContractor === 'Все' || r["Подрядчик"] === selectedContractor))
         .map(r => r["Участок"]).filter(Boolean)
     )];
   }, [allData, selectedBranch, selectedContractor]);
@@ -172,7 +172,7 @@ export default function App() {
     return [...new Set(
       metricsData
         .filter(r => (selectedBranch === 'Все' || r["Ветка"] === selectedBranch) &&
-                     (selectedContractor === 'Все' || r["Подрядчик"] === selectedContractor))
+          (selectedContractor === 'Все' || r["Подрядчик"] === selectedContractor))
         .map(r => r["Участок"]).filter(Boolean)
     )];
   }, [metricsData, selectedBranch, selectedContractor]);
@@ -189,26 +189,29 @@ export default function App() {
   }, [metricsData, metricActiveDate, selectedBranch, selectedContractor, selectedSection]);
 
   // KPI for metrics — now includes pct for all groups
-  const metricsKPI = useMemo(() => {
-    const cablePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель План"]), 0);
-    const cableFact = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель Факт"]), 0);
-    const pipePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Труба План"]), 0);
-    const pipeFact = metricsFiltered.reduce((s, r) => s + toNum(r["Труба Факт"]), 0);
-    const backfillPlan = metricsFiltered.reduce((s, r) => s + toNum(r["Засыпка План"]), 0);
-    const backfillFact = metricsFiltered.reduce((s, r) => s + toNum(r["Засыпка Факт"]), 0);
-    const hddPlan = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ План"]), 0);
-    const hddFact = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ Факт"]), 0);
-    const cablePct = cablePlan > 0 ? ((cableFact / cablePlan) * 100).toFixed(1) : 0;
-    const pipePct = pipePlan > 0 ? ((pipeFact / pipePlan) * 100).toFixed(1) : 0;
-    const backfillPct = backfillPlan > 0 ? ((backfillFact / backfillPlan) * 100).toFixed(1) : 0;
-    const hddPct = hddPlan > 0 ? ((hddFact / hddPlan) * 100).toFixed(1) : 0;
-    return {
-      cablePlan, cableFact, cablePct,
-      pipePlan, pipeFact, pipePct,
-      backfillPlan, backfillFact, backfillPct,
-      hddPlan, hddFact, hddPct
-    };
-  }, [metricsFiltered]);
+const metricsKPI = useMemo(() => {
+  const cablePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель План"]), 0);
+  const cableFact = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель Факт"]), 0);
+  const pipePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Труба План"]), 0);
+  const pipeFact = metricsFiltered.reduce((s, r) => s + toNum(r["Труба Факт"]), 0);
+  const backfillPlan = metricsFiltered.reduce((s, r) => s + toNum(r["Засыпка План"]), 0);
+  const backfillFact = metricsFiltered.reduce((s, r) => s + toNum(r["Засыпка Факт"]), 0);
+  const hddPlan = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ План"]), 0);
+  const hddFact = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ Факт"]), 0);
+
+  // Отклонения (метры): fact - plan
+  const cableDev = +((cableFact - cablePlan).toFixed(1));
+  const pipeDev = +((pipeFact - pipePlan).toFixed(1));
+  const backfillDev = +((backfillFact - backfillPlan).toFixed(1));
+  const hddDev = +((hddFact - hddPlan).toFixed(1));
+
+  return {
+    cablePlan, cableFact, cableDev,
+    pipePlan, pipeFact, pipeDev,
+    backfillPlan, backfillFact, backfillDev,
+    hddPlan, hddFact, hddDev
+  };
+}, [metricsFiltered]);
 
   // keep these for potential future use (not displayed now)
   const metricsTrend = useMemo(() => {
@@ -235,7 +238,7 @@ export default function App() {
       map[key].cablePlan += toNum(r["Кабель План"]);
       map[key].cableFact += toNum(r["Кабель Факт"]);
     });
-    return Object.values(map).sort((a,b) => b.cablePlan + b.cableFact - (a.cablePlan + a.cableFact));
+    return Object.values(map).sort((a, b) => b.cablePlan + b.cableFact - (a.cablePlan + a.cableFact));
   }, [metricsFiltered]);
 
   const toggleDropdown = (name) => setOpenDropdown(prev => prev === name ? null : name);
@@ -635,22 +638,22 @@ export default function App() {
               </div>
             </div>
 
-            {/* Column 3: Percent (Cable top, Pipe below) */}
+            {/* Column 3: Deviation (meters) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ ...card }}>
-                <div style={lbl}>Выполнение кабеля</div>
-                <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#ff9b45' }}>
-                  {metricsKPI.cablePct || 0} <span style={{ fontSize: '12px', opacity: 0.6 }}>%</span>
+                <div style={lbl}>Отклонение кабеля</div>
+                <div style={{ fontSize: '22px', fontWeight: 'bold', color: metricsKPI.cableDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
+                  {(metricsKPI.cableDev > 0 ? '+' : '') + metricsKPI.cableDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
                 </div>
               </div>
               <div style={{ ...card }}>
-                <div style={lbl}>Выполнение трубы</div>
-                <div style={{ fontSize: '18px', fontWeight: '700', color: '#ff9b45' }}>
-                  {metricsKPI.pipePct || 0} <span style={{ fontSize: '12px', opacity: 0.6 }}>%</span>
+                <div style={lbl}>Отклонение трубы</div>
+                <div style={{ fontSize: '18px', fontWeight: '700', color: metricsKPI.pipeDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
+                  {(metricsKPI.pipeDev > 0 ? '+' : '') + metricsKPI.pipeDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
                 </div>
               </div>
             </div>
-          </div>
+            </div>
 
           {/* Next: Backfill group (Засыпка) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
@@ -667,9 +670,9 @@ export default function App() {
               </div>
             </div>
             <div style={card}>
-              <div style={lbl}>Выполнение засыпки</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ff9b45' }}>
-                {metricsKPI.backfillPct || 0} <span style={{ fontSize: '12px', opacity: 0.6 }}>%</span>
+              <div style={lbl}>Отклонение засыпки</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: metricsKPI.backfillDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
+                {(metricsKPI.backfillDev > 0 ? '+' : '') + metricsKPI.backfillDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
               </div>
             </div>
           </div>
@@ -689,9 +692,9 @@ export default function App() {
               </div>
             </div>
             <div style={card}>
-              <div style={lbl}>Выполнение ГНБ</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ff9b45' }}>
-                {metricsKPI.hddPct || 0} <span style={{ fontSize: '12px', opacity: 0.6 }}>%</span>
+              <div style={lbl}>Отклонение ГНБ</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: metricsKPI.hddDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
+                {(metricsKPI.hddDev > 0 ? '+' : '') + metricsKPI.hddDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
               </div>
             </div>
           </div>
