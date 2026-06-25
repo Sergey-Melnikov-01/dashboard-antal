@@ -190,25 +190,28 @@ export default function App() {
 
   // KPI for metrics — now includes pct for all groups
   const metricsKPI = useMemo(() => {
-    const cablePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель План"]), 0);
-    const cableFact = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель Факт"]), 0);
-    const pipePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Труба План"]), 0);
-    const pipeFact = metricsFiltered.reduce((s, r) => s + toNum(r["Труба Факт"]), 0);
-    const backfillPlan = metricsFiltered.reduce((s, r) => s + toNum(r["Засыпка План"]), 0);
-    const backfillFact = metricsFiltered.reduce((s, r) => s + toNum(r["Засыпка Факт"]), 0);
-    const hddPlan = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ План"]), 0);
-    const hddFact = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ Факт"]), 0);
-    const cablePct = cablePlan > 0 ? ((cableFact / cablePlan) * 100).toFixed(1) : 0;
-    const pipePct = pipePlan > 0 ? ((pipeFact / pipePlan) * 100).toFixed(1) : 0;
-    const backfillPct = backfillPlan > 0 ? ((backfillFact / backfillPlan) * 100).toFixed(1) : 0;
-    const hddPct = hddPlan > 0 ? ((hddFact / hddPlan) * 100).toFixed(1) : 0;
-    return {
-      cablePlan, cableFact, cablePct,
-      pipePlan, pipeFact, pipePct,
-      backfillPlan, backfillFact, backfillPct,
-      hddPlan, hddFact, hddPct
-    };
-  }, [metricsFiltered]);
+  const cablePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель План"]), 0);
+  const cableFact = metricsFiltered.reduce((s, r) => s + toNum(r["Кабель Факт"]), 0);
+  const pipePlan = metricsFiltered.reduce((s, r) => s + toNum(r["Труба План"]), 0);
+  const pipeFact = metricsFiltered.reduce((s, r) => s + toNum(r["Труба Факт"]), 0);
+  const backfillPlan = metricsFiltered.reduce((s, r) => s + toNum(r["Засыпка План"]), 0);
+  const backfillFact = metricsFiltered.reduce((s, r) => s + toNum(r["Засыпка Факт"]), 0);
+  const hddPlan = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ План"]), 0);
+  const hddFact = metricsFiltered.reduce((s, r) => s + toNum(r["ГНБ Факт"]), 0);
+
+  // Отклонения (метры): fact - plan
+  const cableDev = +((cableFact - cablePlan).toFixed(1));
+  const pipeDev = +((pipeFact - pipePlan).toFixed(1));
+  const backfillDev = +((backfillFact - backfillPlan).toFixed(1));
+  const hddDev = +((hddFact - hddPlan).toFixed(1));
+
+  return {
+    cablePlan, cableFact, cableDev,
+    pipePlan, pipeFact, pipeDev,
+    backfillPlan, backfillFact, backfillDev,
+    hddPlan, hddFact, hddDev
+  };
+}, [metricsFiltered]);
 
   // keep these for potential future use (not displayed now)
   const metricsTrend = useMemo(() => {
