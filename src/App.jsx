@@ -22,7 +22,7 @@ const toNum = v => {
   return isNaN(n) ? 0 : n;
 };
 
-// Custom dark tooltip for PIR chart — вставить сразу после toNum
+// Custom dark tooltip for PIR chart
 const PirTooltip = ({ active, payload }) => {
   if (!active || !payload || !payload.length) return null;
   const d = payload[0].payload;
@@ -41,6 +41,42 @@ const PirTooltip = ({ active, payload }) => {
       <div style={{ color: '#9ca3af', fontSize: 12 }}>Регион: {d.region}</div>
       <div style={{ color: '#2de2a6', fontWeight: 800, marginTop: 8 }}>Готовность: {d.progress}%</div>
       {d.status ? <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 6 }}>Статус: {d.status}</div> : null}
+    </div>
+  );
+};
+
+// ProgressBar — компонент для трекера этапов ПИР
+const ProgressBar = ({ label, plan, fact, pct, unit }) => {
+  const displayPct = Math.round((pct || 0) * 100);
+  // Цвет меняется от прогресса: красный (<30), оранжевый (<90), зеленый (>=90)
+  const barColor = displayPct < 30 ? '#ef4444' : displayPct < 90 ? '#f59e0b' : '#10b981';
+
+  return (
+    <div style={{ marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '8px' }}>
+        {/* Названия этапа — сделали крупнее и белым */}
+        <div style={{ fontSize: '15px', fontWeight: '600', color: '#ffffff' }}>{label}</div>
+        
+        <div style={{ textAlign: 'right' }}>
+          {/* Процент выполнения — чуть крупнее */}
+          <div style={{ fontSize: '15px', fontWeight: 'bold', color: barColor }}>{displayPct}%</div>
+          {/* Километры — увеличили шрифт и яркость, оставили в одну строку */}
+          <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '500', marginTop: '2px' }}>
+            {(fact || 0).toFixed(1)} км / {(plan || 0).toFixed(1)} км
+          </div>
+        </div>
+      </div>
+      
+      {/* Полоска прогресса */}
+      <div style={{ height: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden' }}>
+        <div style={{
+          width: `${Math.min(displayPct, 100)}%`,
+          height: '100%',
+          background: barColor,
+          boxShadow: `0 0 10px ${barColor}44`,
+          transition: 'width 0.5s ease-out'
+        }} />
+      </div>
     </div>
   );
 };
@@ -79,7 +115,7 @@ export default function App() {
 
   useEffect(() => {
     if (activeTab === 'pir') {
-      setPirMode('psd');
+      setPirMode('pir');
     }
   }, [activeTab]);
 
@@ -314,6 +350,45 @@ export default function App() {
     const notStarted = pirFiltered.filter(d => d.progress <= 0).length;
     return { done, inProgress, notStarted };
   }, [pirFiltered]);
+
+  // -----------------------------
+  // PIR Stage Tracking (DB_PIR — новый формат: Трекер ВОЛС / Трекер МУС)
+  // -----------------------------
+  const pirStages = useMemo(() => {
+    const vols = [];
+    const mus = [];
+    let currentTracker = null;
+
+    (pirData || []).forEach(r => {
+      // Первая колонка — название строки/этапа
+      const title = String(
+        r["ПИР План-фактный анализ 25.06"] ??
+        r["Название"] ??
+        r["Этап"] ??
+        Object.values(r)[0] ??
+        ''
+      ).trim();
+
+      if (!title) return;
+
+      if (title.includes('Трекер ВОЛС')) { currentTracker = 'vols'; return; }
+      if (title.includes('Трекер МУС'))  { currentTracker = 'mus';  return; }
+
+      const unit   = String(r["Unnamed: 1"] ?? r["Единица измерения"] ?? r["Еденица измерения"] ?? '').trim();
+      const plan   = toNum(r["Unnamed: 2"] ?? r["Объём (план)"] ?? 0);
+      const fact   = toNum(r["Unnamed: 3"] ?? r["Объём (факт)"] ?? 0);
+      const rawPct = r["Unnamed: 4"] ?? r["% Выполнения"] ?? r["% выполнения"] ?? 0;
+      const pct    = toNum(rawPct);
+
+      if (plan > 0 || fact > 0 || pct > 0) {
+        const item = { name: title, unit, plan, fact, pct };
+        if (currentTracker === 'vols') vols.push(item);
+        if (currentTracker === 'mus')  mus.push(item);
+      }
+    });
+
+    return { vols, mus };
+  }, [pirData]);
 
   const toggleDropdown = (name) => setOpenDropdown(prev => prev === name ? null : name);
 
@@ -640,21 +715,10 @@ export default function App() {
         </>
       )}
 
-      // === ЗАМЕНИТЕ СТАРЫЙ БЛОК PIR/ПСД НА ЭТОТ БЛОК ===
-
           {activeTab === 'pir' && (
             <>
-              {/* Кнопки ПСД / ПИР — простой стиль как у верхних вкладок (без слова "Режим") */}
-              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                <button
-                  onClick={() => setPirMode('psd')}
-                  className={`bubbly-button ${pirMode === 'psd' ? 'active' : ''}`}
-                  aria-pressed={pirMode === 'psd'}
-                  style={{ padding: '6px 12px' }}
-                >
-                  ПСД
-                </button>
-
+              {/* Кнопки ПИР / ПСД */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
                 <button
                   onClick={() => setPirMode('pir')}
                   className={`bubbly-button ${pirMode === 'pir' ? 'active' : ''}`}
@@ -663,112 +727,61 @@ export default function App() {
                 >
                   ПИР
                 </button>
+                <button
+                  onClick={() => setPirMode('psd')}
+                  className={`bubbly-button ${pirMode === 'psd' ? 'active' : ''}`}
+                  aria-pressed={pirMode === 'psd'}
+                  style={{ padding: '6px 12px' }}
+                >
+                  ПСД
+                </button>
               </div>
 
-              {/* KPI-панель остаётся как и была (если нужна) */}
-              <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                <div style={{ ...card, flex: 1, minWidth: 160 }}>
-                  <div style={lbl}>Завершено (100%)</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: '#10b981' }}>{pirKPI.done} уч.</div>
-                </div>
-                <div style={{ ...card, flex: 1, minWidth: 160 }}>
-                  <div style={lbl}>В разработке</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: '#3b82f6' }}>{pirKPI.inProgress} уч.</div>
-                </div>
-                <div style={{ ...card, flex: 1, minWidth: 160 }}>
-                  <div style={lbl}>Не начато</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: '#9ca3af' }}>{pirKPI.notStarted} уч.</div>
-                </div>
-              </div>
-
-              {/* Если выбран ПСД — показываем диаграмму ПСД (без таблицы) */}
-              {pirMode === 'psd' && (
-                <div style={{ ...card, marginBottom: '12px' }}>
-                  <div style={{ ...lbl, marginBottom: '8px' }}>Прогресс выполнения ПСД по участкам (%)</div>
-
-                  {(() => {
-                    const chartHeight = Math.min(pirFiltered.length * 44 + 60, 480);
-
-                    return (
-                      <div style={{ width: '100%', height: chartHeight }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart
-                            layout="vertical"
-                            data={pirFiltered}
-                            margin={{ top: 6, right: 96, left: 24, bottom: 6 }}
-                          >
-                            <defs>
-                              <linearGradient id="pirGrad" x1="0" x2="1">
-                                <stop offset="0%" stopColor="#34d399" stopOpacity={0.95} />
-                                <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.95} />
-                              </linearGradient>
-                            </defs>
-
-                            <XAxis type="number" hide />
-                            <YAxis
-                              type="category"
-                              dataKey="name"
-                              width={220}
-                              axisLine={false}
-                              tickLine={false}
-                              tick={{ fontSize: 13, fill: '#cbd5e1', fontFamily: 'Inter, Arial', fontWeight: 600, dx: 0 }}
-                            />
-
-                            <Tooltip content={<PirTooltip />} wrapperStyle={{ zIndex: 9999 }} cursor={false} />
-
-                            <Bar
-                              dataKey="progress"
-                              name="Выполнение, %"
-                              barSize={18}
-                              radius={20}
-                              isAnimationActive
-                              animationDuration={900}
-                            >
-                              {pirFiltered.map((entry, idx) => {
-                                const pct = entry.progress;
-                                const fill = pct >= 100 ? '#10b981' : (pct >= 60 ? '#06b6d4' : '#60a5fa');
-                                return <Cell key={`cell-${idx}`} fill={fill} />;
-                              })}
-
-                              <LabelList
-                                dataKey="progress"
-                                position="right"
-                                formatter={(v) => `${v}%`}
-                                style={{ fill: '#ffffff', fontWeight: 900, fontSize: 13, textShadow: '0 1px 0 rgba(0,0,0,0.6)' }}
-                              />
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
+              {pirMode === 'pir' ? (
+                <>
+                  {/* Трекер ВОЛС во всю ширину */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
+                    <div style={card}>
+                      <div style={{
+                        ...lbl,
+                        color: '#2de2a6',
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        borderBottom: '1px solid rgba(45,226,166,0.15)',
+                        paddingBottom: '10px',
+                        marginBottom: '20px',
+                        letterSpacing: '1px'
+                      }}>
+                         ТРЕКЕР ВОЛС — Линейная часть
                       </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {/* Если выбран ПИР — оставляем только карточку "в разработке" (никаких таблиц/диаграмм) */}
-              {pirMode === 'pir' && (
+                      {pirStages.vols.length > 0
+                        ? pirStages.vols.map((s, i) => (
+                            <ProgressBar key={i} label={s.name} plan={s.plan} fact={s.fact} pct={s.pct} unit={s.unit} />
+                          ))
+                        : <div style={{ color: '#64748b', fontSize: 13 }}>Нет данных по ВОЛС</div>
+                      }
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* ПСД — в разработке (срабатывает, если pirMode !== 'pir') */
                 <div style={{
                   ...card,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  height: 160,
+                  height: 180,
                   textAlign: 'center',
                   color: '#cbd5e1',
-                  marginBottom: '12px'
                 }}>
                   <div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: '#ffffff', marginBottom: 6 }}>ПИР — в разработке</div>
-                    <div style={{ fontSize: 13, opacity: 0.85 }}>
-                      Здесь будет отдельный график и данные по ПИР. Сейчас функция в работе.
-                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: '#ffffff', marginBottom: 6 }}>ПСД — в разработке</div>
+                    <div style={{ fontSize: 13, opacity: 0.85 }}>Здесь будет детализация по проектно-сметной документации.</div>
                   </div>
                 </div>
               )}
-
-              {/* УДАЛЕНО: таблица "Детализация по участкам" для вкладки PIR — оставлена только в СМР и МЕТРИКИ */}
             </>
-          )}
+          )}   
 
       {activeTab === 'schedule' && (
         <>
