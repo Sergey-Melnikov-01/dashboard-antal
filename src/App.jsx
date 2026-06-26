@@ -196,6 +196,17 @@ export default function App() {
     const pct = plan > 0 ? ((fact / plan) * 100).toFixed(1) : 0;
     return { totalFact: fact, totalPlan: plan, deviation: dev, totalPercent: pct };
   }, [filtered]);
+  // Стоимости: Материалы и СМР
+  const { matPlan, matFact, matDev, smrPlan, smrFact, smrDev } = useMemo(() => {
+    const mp = filtered.reduce((s, r) => s + toNum(r["Материалы [План]"]), 0);
+    const mf = filtered.reduce((s, r) => s + toNum(r["Материалы [Факт]"]), 0);
+    const sp = filtered.reduce((s, r) => s + toNum(r["СМР [План]"]), 0);
+    const sf = filtered.reduce((s, r) => s + toNum(r["СМР [Факт]"]), 0);
+    return {
+      matPlan: mp, matFact: mf, matDev: mf - mp,
+      smrPlan: sp, smrFact: sf, smrDev: sf - sp,
+    };
+  }, [filtered]);
 
   const trendData = useMemo(() => {
     return dates.map(date => {
@@ -577,19 +588,19 @@ export default function App() {
             ].map((kpi, i) => (
               <div key={i} style={card}>
                 <div style={lbl}>{kpi.label}</div>
-                <div style={{ fontSize: '26px', fontWeight: 'bold', color: kpi.color }}>
-                  {kpi.val} <span style={{ fontSize: '13px', opacity: 0.6 }}>{kpi.unit}</span>
+                <div style={{ fontSize: '20px', fontWeight: 'bold', color: kpi.color, whiteSpace: 'nowrap' }}>
+                  {kpi.val} <span style={{ fontSize: '12px', opacity: 0.7, marginLeft: '4px' }}>{kpi.unit}</span>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Charts row (unchanged) */}
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            {/* Trend */}
+          {/* Charts row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            {/* Динамика — ширина уменьшена */}
             <div style={card}>
               <div style={lbl}>Динамика выполнения плана (км)</div>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={trendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" />
                   <XAxis dataKey="date" stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
@@ -601,23 +612,57 @@ export default function App() {
               </ResponsiveContainer>
             </div>
 
-            {/* Contractors */}
-            <div style={card}>
-              <div style={lbl}>Выполнение по подрядчикам (км)</div>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={contractorStats} margin={{ top: 35, right: 10, left: 10, bottom: 5 }} barGap={2}>
-                  <Tooltip
-                    cursor={{ fill: 'rgba(255,255,255,0.03)' }}
-                    contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 11, borderRadius: '8px' }}
-                  />
-                  <Bar dataKey="plan" fill="#2898ff" radius={[4, 4, 0, 0]} barSize={45}>
-                    <LabelList dataKey="plan" position="top" style={{ fill: '#2898ff', fontSize: 11, fontWeight: 'bold' }} formatter={(v) => v > 0 ? v : ''} />
-                  </Bar>
-                  <Bar dataKey="fact" fill="#2de2a6" radius={[4, 4, 0, 0]} barSize={45}>
-                    <LabelList dataKey="fact" position="top" style={{ fill: '#2de2a6', fontSize: 11, fontWeight: 'bold' }} formatter={(v) => v > 0 ? v : ''} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            {/* Правая колонка: МАТ + СМР (вместо подрядчиков) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Материалы */}
+              <div style={card}>
+                <div style={lbl}>МАТЕРИАЛЫ</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '8px' }}>
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>План</div>
+                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2898ff', whiteSpace: 'nowrap' }}>
+                      {matPlan.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Факт</div>
+                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2de2a6', whiteSpace: 'nowrap' }}>
+                      {matFact.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Выполнение</div>
+                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ff9b45', whiteSpace: 'nowrap' }}>
+                      {matPlan > 0 ? ((matFact / matPlan) * 100).toFixed(1) : '0'}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* СМР */}
+              <div style={card}>
+                <div style={lbl}>СМР</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '8px' }}>
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>План</div>
+                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2898ff', whiteSpace: 'nowrap' }}>
+                      {smrPlan.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Факт</div>
+                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2de2a6', whiteSpace: 'nowrap' }}>
+                      {smrFact.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Выполнение</div>
+                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ff9b45', whiteSpace: 'nowrap' }}>
+                      {smrPlan > 0 ? ((smrFact / smrPlan) * 100).toFixed(1) : '0'}%
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -650,6 +695,7 @@ export default function App() {
                       <Tooltip
                         cursor={{ fill: '#15251e' }}
                         contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12 }}
+                        formatter={(value) => (value != null ? Number(value).toFixed(1) : '')}
                       />
                       <Bar
                         dataKey="План км"
@@ -657,7 +703,12 @@ export default function App() {
                         barSize={visibleSections.length < 5 ? 28 : 12}
                         radius={[0, 4, 4, 0]}
                       >
-                        <LabelList dataKey="План км" position="insideRight" style={{ fill: '#fff', fontSize: 10, fontWeight: 'bold' }} />
+                        <LabelList 
+                          dataKey="План км" 
+                          position="insideRight" 
+                          style={{ fill: '#fff', fontSize: 10, fontWeight: 'bold' }} 
+                          formatter={(v) => (v > 0 ? Number(v).toFixed(1) : '')} 
+                          />
                       </Bar>
                       <Bar
                         dataKey="Факт км"
@@ -665,7 +716,9 @@ export default function App() {
                         barSize={visibleSections.length < 5 ? 28 : 12}
                         radius={[0, 4, 4, 0]}
                       >
-                        <LabelList dataKey="Факт км" position="right" style={{ fill: '#2de2a6', fontSize: 11, fontWeight: 'bold' }} />
+                        <LabelList dataKey="Факт км" position="right" style={{ fill: '#2de2a6', fontSize: 11, fontWeight: 'bold' }} 
+                        formatter={(v) => (v > 0 ? Number(v).toFixed(1) : '')}
+                        />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -833,7 +886,7 @@ export default function App() {
               </div>
               <div style={{ ...card }}>
                 <div style={lbl}>Труба (план)</div>
-                <div style={{ fontSize: '18px', fontWeight: '700', color: '#2898ff' }}>
+                <div style={{ fontSize: '22px', fontWeight: '700', color: '#2898ff' }}>
                   {metricsKPI.pipePlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
                 </div>
               </div>
@@ -849,7 +902,7 @@ export default function App() {
               </div>
               <div style={{ ...card }}>
                 <div style={lbl}>Труба (факт)</div>
-                <div style={{ fontSize: '18px', fontWeight: '700', color: '#2de2a6' }}>
+                <div style={{ fontSize: '22px', fontWeight: '700', color: '#2de2a6' }}>
                   {metricsKPI.pipeFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
                 </div>
               </div>
@@ -865,7 +918,7 @@ export default function App() {
               </div>
               <div style={{ ...card }}>
                 <div style={lbl}>Отклонение трубы</div>
-                <div style={{ fontSize: '18px', fontWeight: '700', color: metricsKPI.pipeDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
+                <div style={{ fontSize: '22px', fontWeight: '700', color: metricsKPI.pipeDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
                   {(metricsKPI.pipeDev > 0 ? '+' : '') + metricsKPI.pipeDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
                 </div>
               </div>
@@ -876,19 +929,19 @@ export default function App() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
             <div style={card}>
               <div style={lbl}>Засыпка (план)</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2898ff' }}>
+              <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2898ff' }}>
                 {metricsKPI.backfillPlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
               </div>
             </div>
             <div style={card}>
               <div style={lbl}>Засыпка (факт)</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2de2a6' }}>
+              <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2de2a6' }}>
                 {metricsKPI.backfillFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
               </div>
             </div>
             <div style={card}>
               <div style={lbl}>Отклонение засыпки</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: metricsKPI.backfillDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
+              <div style={{ fontSize: '22px', fontWeight: 'bold', color: metricsKPI.backfillDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
                 {(metricsKPI.backfillDev > 0 ? '+' : '') + metricsKPI.backfillDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
               </div>
             </div>
@@ -898,19 +951,19 @@ export default function App() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
             <div style={card}>
               <div style={lbl}>ГНБ (план)</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2898ff' }}>
+              <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2898ff' }}>
                 {metricsKPI.hddPlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
               </div>
             </div>
             <div style={card}>
               <div style={lbl}>ГНБ (факт)</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2de2a6' }}>
+              <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2de2a6' }}>
                 {metricsKPI.hddFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
               </div>
             </div>
             <div style={card}>
               <div style={lbl}>Отклонение ГНБ</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: metricsKPI.hddDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
+              <div style={{ fontSize: '22px', fontWeight: 'bold', color: metricsKPI.hddDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
                 {(metricsKPI.hddDev > 0 ? '+' : '') + metricsKPI.hddDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
               </div>
             </div>
