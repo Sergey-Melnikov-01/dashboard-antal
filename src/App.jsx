@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
-  LineChart, Line, Cell
+  LineChart, Line
 } from 'recharts';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbw6XLjGzrrzg4knwf9QQ62zgv5jnKxvzZnZKhLUTSFX14b2dqa_iJZn2y5GjzPBgkH3/exec";
@@ -129,14 +129,11 @@ export default function App() {
       // Метрики (если есть)
       if (Array.isArray(raw?.DB_METRIC)) {
         setMetricsData(raw.DB_METRIC);
-        console.log('Loaded DB_METRIC rows:', raw.DB_METRIC.length);
       } else if (Array.isArray(raw?.DB_PIR)) {
         // fallback if needed
         setMetricsData(raw.DB_PIR);
-        console.log('Fallback: loaded DB_PIR for metrics rows:', raw.DB_PIR.length);
       } else {
         setMetricsData([]);
-        console.log('No DB_METRIC found — metricsData empty');
       }
 
       // PIR data (if present in payload)
