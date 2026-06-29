@@ -628,12 +628,11 @@ export default function App() {
               <LineChart data={trendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" />
                 <XAxis dataKey="date" stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
-                <YAxis stroke="#4b5563" 
-                  fontSize={10} 
-  tick={{ fill: '#9ca3af' }}
-  domain={[0, 1500]} // Фиксируем максимум, чтобы не вылезало 1650
-  ticks={[0, 250, 500, 750, 1000, 1250, 1500]} // Четкий шаг 250
-  allowDataOverflow={false} />
+                <YAxis
+                  stroke="#4b5563"
+                  fontSize={10}
+                  tick={{ fill: '#9ca3af' }}
+                  domain={[(dataMin) => Math.floor(dataMin * 0.8), (dataMax) => Math.ceil(dataMax * 1.2)]} />
                 <Tooltip contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12 }} />
                 <Line type="monotone" dataKey="plan" stroke="#2898ff" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="fact" stroke="#2de2a6" strokeWidth={2} dot={{ r: 3, fill: '#2de2a6' }} />
