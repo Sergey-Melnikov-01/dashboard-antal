@@ -487,12 +487,18 @@ export default function App() {
           <span style={{ position: 'static', marginLeft: '4px', fontSize: '9px' }}>{isOpen ? '▲' : '▼'}</span>
         </button>
         {isOpen && (
-          <div className="push-dropdown-menu">
+            <div className="push-dropdown-menu">
             <div
               className={`push-dropdown-item ${!value || value === 'Все' || value === '' ? 'selected' : ''}`}
               onClick={() => { onChange(onReset !== undefined ? onReset : 'Все'); setOpenDropdown(null); }}
             >
-              {label === 'Участок' ? 'Все участки' : `Все ${label.toLowerCase()}`}
+              {(() => {
+                if (label === 'Участок') return 'Все участки';
+                if (label === 'Ветка') return 'Все ветки';
+                if (label === 'Подрядчик') return 'Все подрядчики';
+                if (label === 'Дата') return 'Даты';
+                return `Все ${label.toLowerCase()}`;
+              })()}
             </div>
             {options.map(opt => (
               <div
@@ -503,7 +509,7 @@ export default function App() {
                 {opt}
               </div>
             ))}
-          </div>
+          </div>                        
         )}
       </div>
     );
