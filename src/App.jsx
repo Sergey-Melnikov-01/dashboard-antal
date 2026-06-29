@@ -611,7 +611,7 @@ export default function App() {
           ].map((kpi, i) => (
             <div key={i} style={card}>
               <div style={lbl}>{kpi.label}</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: kpi.color, whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: '28px', fontWeight: '800', color: kpi.color, whiteSpace: 'nowrap' }}>
                 {kpi.val} <span style={{ fontSize: '16px', opacity: 0.7, marginLeft: '4px' }}>{kpi.unit}</span>
               </div>
             </div>
