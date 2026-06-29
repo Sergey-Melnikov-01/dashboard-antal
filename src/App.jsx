@@ -49,7 +49,7 @@ const PirTooltip = ({ active, payload }) => {
 const ProgressBar = ({ label, plan, fact, pct, unit }) => {
   const displayPct = Math.round((pct || 0) * 100);
   // Цвет меняется от прогресса: красный (<30), оранжевый (<90), зеленый (>=90)
-  const barColor = displayPct < 30 ? '#ef4444' : displayPct < 90 ? '#f59e0b' : '#10b981';
+  const barColor = displayPct < 30 ? '#ff1a1a' : displayPct < 90 ? '#ff7b00' : '#10b981';
 
   return (
     <div style={{ marginBottom: '24px' }}>
@@ -398,7 +398,11 @@ export default function App() {
       }
     });
 
-    return { vols, mus };
+    // Сортируем списки по убыванию процента выполнения
+    const sortedVols = [...vols].sort((a, b) => b.pct - a.pct);
+    const sortedMus = [...mus].sort((a, b) => b.pct - a.pct);
+
+    return { vols: sortedVols, mus: sortedMus };
   }, [pirData]);
 
   const toggleDropdown = (name) => setOpenDropdown(prev => prev === name ? null : name);
@@ -596,7 +600,7 @@ export default function App() {
           </div>
 
           {/* Charts row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '5fr 6fr', gap: '16px', marginBottom: '16px', alignItems: 'stretch' }}>
             {/* Динамика — ширина уменьшена */}
             <div style={card}>
               <div style={lbl}>Динамика выполнения плана (км)</div>
