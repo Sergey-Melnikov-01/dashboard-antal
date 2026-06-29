@@ -492,7 +492,7 @@ export default function App() {
               className={`push-dropdown-item ${!value || value === 'Все' || value === '' ? 'selected' : ''}`}
               onClick={() => { onChange(onReset !== undefined ? onReset : 'Все'); setOpenDropdown(null); }}
             >
-              {`Все ${label.toLowerCase()}`}
+              {label === 'Участок' ? 'Все участки' : `Все ${label.toLowerCase()}`}
             </div>
             {options.map(opt => (
               <div
@@ -625,17 +625,36 @@ export default function App() {
           <div style={card}>
             <div style={lbl}>Динамика выполнения плана (км)</div>
             <ResponsiveContainer width="100%" height={252}>
-              <LineChart data={trendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" />
+              <LineChart data={trendData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorFact" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2de2a6" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#2de2a6" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" vertical={false} />
                 <XAxis dataKey="date" stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
-                <YAxis
-                  stroke="#4b5563"
-                  fontSize={10}
-                  tick={{ fill: '#9ca3af' }}
-                  domain={[(dataMin) => Math.floor(dataMin * 0.8), (dataMax) => Math.ceil(dataMax * 1.2)]} />
+                <YAxis hide domain={['auto', 'auto']} />
                 <Tooltip contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12 }} />
-                <Line type="monotone" dataKey="plan" stroke="#2898ff" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="fact" stroke="#2de2a6" strokeWidth={2} dot={{ r: 3, fill: '#2de2a6' }} />
+                
+                {/* Линия Плана — пунктиром, если факт 0, чтобы подчеркнуть ожидание */}
+                <Line 
+                  type="monotone" 
+                  dataKey="plan" 
+                  stroke="#2898ff" 
+                  strokeWidth={2} 
+                  dot={{ r: 4, fill: '#1c1d26', stroke: '#2898ff', strokeWidth: 2 }} 
+                />
+                
+                {/* Линия Факта — с точками на каждой дате */}
+                <Line 
+                  type="monotone" 
+                  dataKey="fact" 
+                  stroke="#2de2a6" 
+                  strokeWidth={3} 
+                  dot={{ r: 4, fill: '#2de2a6' }}
+                  activeDot={{ r: 6 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -864,7 +883,23 @@ export default function App() {
               label="Участок"
               value={selectedSection}
               options={metricsSections.length ? metricsSections : sections}
-              onChange={v => setSelectedSection(v)}
+              onChange={v => {
+                setSelectedSection(v);
+                setOpenDropdown(null);
+
+                if (v !== 'Все') {
+                  // Ищем в данных МЕТРИК, а не СМР
+                  const row = metricsData.find(r => r["Участок"] === v);
+                  if (row) {
+                    if (row["Подрядчик"]) setSelectedContractor(row["Подрядчик"]);
+                    if (row["Ветка"]) setSelectedBranch(row["Ветка"]);
+                  }
+                } else {
+                  // При сбросе на "Все" очищаем зависимые фильтры (как в СМР)
+                  setSelectedContractor('Все');
+                  setSelectedBranch('Все');
+                }
+              }}
             />
             <PushDropdown
               name="date_metrics"
