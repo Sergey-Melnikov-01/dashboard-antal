@@ -127,3 +127,6 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #2898ff;
 }
+body {
+  translate: no;
+}
