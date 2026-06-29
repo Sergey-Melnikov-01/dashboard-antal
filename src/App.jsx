@@ -570,7 +570,24 @@ export default function App() {
               label="Участок"
               value={selectedSection}
               options={sections}
-              onChange={v => setSelectedSection(v)}
+              onChange={v => {
+                setSelectedSection(v);
+                setOpenDropdown(null); // ЗАКРЫВАЕМ фильтр после выбора
+
+                if (v !== 'Все') {
+                  // Ищем именно в allData, так как это исходный массив
+                  const row = allData.find(r => r["Участок"] === v);
+                  if (row) {
+                    // Автоматически выставляем Подрядчика и Ветку
+                    if (row["Подрядчик"]) setSelectedContractor(row["Подрядчик"]);
+                    if (row["Ветка"]) setSelectedBranch(row["Ветка"]);
+                  }
+                } else {
+                  // Если выбрали "Все", сбрасываем зависимые фильтры
+                  setSelectedContractor('Все');
+                  setSelectedBranch('Все');
+                }
+              }}
             />
             <PushDropdown
               name="date"
@@ -584,91 +601,118 @@ export default function App() {
 
           {/* KPI Row 1 — Объёмы */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '16px' }}>
+          {[
+            { label: 'План общий', val: totalPlan.toFixed(1), unit: 'км', color: '#2898ff' },
+            { label: 'Факт общий', val: totalFact.toFixed(1), unit: 'км', color: '#2de2a6' },
+            { label: 'Отклонение', val: (deviation > 0 ? '+' : '') + deviation.toFixed(1), unit: 'км', color: deviation >= 0 ? '#2de2a6' : '#ff4d4d' },
+            { 
+              label: 'Выполнение', 
+              val: totalPercent, 
+              unit: '%', 
+              color: parseFloat(totalPercent) > 100 ? '#ff4d4d' : '#ff9b45' 
+            },
+          ].map((kpi, i) => (
+            <div key={i} style={card}>
+              <div style={lbl}>{kpi.label}</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: kpi.color, whiteSpace: 'nowrap' }}>
+                {kpi.val} <span style={{ fontSize: '16px', opacity: 0.7, marginLeft: '4px' }}>{kpi.unit}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Charts row */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', alignItems: 'stretch' }}>
+          
+          {/* График динамики */}
+          <div style={card}>
+            <div style={lbl}>Динамика выполнения плана (км)</div>
+            <ResponsiveContainer width="100%" height={252}>
+              <LineChart data={trendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" />
+                <XAxis dataKey="date" stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
+                <YAxis stroke="#4b5563" 
+                  fontSize={10} 
+  tick={{ fill: '#9ca3af' }}
+  domain={[0, 1500]} // Фиксируем максимум, чтобы не вылезало 1650
+  ticks={[0, 250, 500, 750, 1000, 1250, 1500]} // Четкий шаг 250
+  allowDataOverflow={false} />
+                <Tooltip contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12 }} />
+                <Line type="monotone" dataKey="plan" stroke="#2898ff" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="fact" stroke="#2de2a6" strokeWidth={2} dot={{ r: 3, fill: '#2de2a6' }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Правая часть: 2 карточки со спидометрами */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            
             {[
-              { label: 'План общий', val: totalPlan.toFixed(1), unit: 'км', color: '#2898ff' },
-              { label: 'Факт общий', val: totalFact.toFixed(1), unit: 'км', color: '#2de2a6' },
-              { label: 'Отклонение', val: (deviation > 0 ? '+' : '') + deviation.toFixed(1), unit: 'км', color: deviation >= 0 ? '#2de2a6' : '#ff4d4d' },
-              { label: 'Выполнение', val: totalPercent, unit: '%', color: '#ff9b45' },
-            ].map((kpi, i) => (
-              <div key={i} style={card}>
-                <div style={lbl}>{kpi.label}</div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color: kpi.color, whiteSpace: 'nowrap' }}>
-                  {kpi.val} <span style={{ fontSize: '12px', opacity: 0.7, marginLeft: '4px' }}>{kpi.unit}</span>
+              { label: 'Материалы', plan: matPlan, fact: matFact },
+              { label: 'СМР', plan: smrPlan, fact: smrFact }
+            ].map((item, idx) => {
+              const percent = item.plan > 0 ? Math.min((item.fact / item.plan) * 100, 100) : 0;
+              const displayPercent = item.plan > 0 ? ((item.fact / item.plan) * 100).toFixed(1) : '0';
+              const radius = 110;
+              const circumference = Math.PI * radius;
+              const offset = circumference - (percent / 100) * circumference;
+
+              return (
+                <div key={idx} style={{ ...card, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '20px 16px 16px' }}>
+                  
+                  {/* Заголовок */}
+                  <div style={{ ...lbl, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>{item.label}</div>
+
+                  {/* Спидометр — увеличенный */}
+                  <div style={{ position: 'relative', width: '250px', height: '140px', display: 'flex', justifyContent: 'center', alignItems: 'flex-end', margin: '0 0 10px 0' }}>
+                    <svg width="250" height="145" viewBox="0 0 250 145">
+                      {/* Подложка — синяя дуга (цвет совпадает с цифрами плана) */}
+                      <path
+                        d="M 15 130 A 110 110 0 0 1 235 130"
+                        fill="none"
+                        stroke="#2898ff"
+                        strokeWidth="16"
+                        strokeLinecap="round"
+                        opacity="0.25"
+                      />
+                      {/* Факт — зелёная дуга */}
+                      <path
+                        d="M 15 130 A 110 110 0 0 1 235 130"
+                        fill="none"
+                        stroke={(item.fact / item.plan) > 1.0 ? '#ff4d4d' : '#2de2a6'}
+                        strokeWidth="16"
+                        strokeLinecap="round"
+                        strokeDasharray={circumference}
+                        strokeDashoffset={offset}
+                        style={{ transition: 'stroke-dashoffset 1s ease-out' }}
+                      />
+                    </svg>
+                    {/* Процент в центре дуги */}
+                    <div style={{ position: 'absolute', bottom: '10px', fontSize: '42px', fontWeight: '900', 
+                      color: (item.fact / item.plan) > 1.0 ? '#ff4d4d' : '#ff9b45',
+                       lineHeight: 1
+                    }}>
+                      {displayPercent}%
+                    </div>
+                  </div>
+
+                  {/* План и Факт — прижаты к низу, крупный шрифт */}
+                  <div style={{ width: '100%', marginTop: 'auto' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #1d2d24' }}>
+                      <span style={{ fontSize: '14px', color: '#9ca3af' }}>План</span>
+                      <span style={{ fontSize: '20px', fontWeight: '800', color: '#2898ff' }}>{item.plan.toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
+                      <span style={{ fontSize: '14px', color: '#9ca3af' }}>Факт</span>
+                      <span style={{ fontSize: '20px', fontWeight: '800', color: '#2de2a6' }}>{item.fact.toLocaleString()}</span>
+                    </div>
+                  </div>
+
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-
-          {/* Charts row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '5fr 6fr', gap: '16px', marginBottom: '16px', alignItems: 'stretch' }}>
-            {/* Динамика — ширина уменьшена */}
-            <div style={card}>
-              <div style={lbl}>Динамика выполнения плана (км)</div>
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={trendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" />
-                  <XAxis dataKey="date" stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
-                  <YAxis stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
-                  <Tooltip contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12 }} />
-                  <Line type="monotone" dataKey="plan" stroke="#2898ff" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="fact" stroke="#2de2a6" strokeWidth={2} dot={{ r: 3, fill: '#2de2a6' }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Правая колонка: МАТ + СМР (вместо подрядчиков) */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* Материалы */}
-              <div style={card}>
-                <div style={lbl}>МАТЕРИАЛЫ</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '8px' }}>
-                  <div>
-                    <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>План</div>
-                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2898ff', whiteSpace: 'nowrap' }}>
-                      {matPlan.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Факт</div>
-                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2de2a6', whiteSpace: 'nowrap' }}>
-                      {matFact.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Выполнение</div>
-                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ff9b45', whiteSpace: 'nowrap' }}>
-                      {matPlan > 0 ? ((matFact / matPlan) * 100).toFixed(1) : '0'}%
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* СМР */}
-              <div style={card}>
-                <div style={lbl}>СМР</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '8px' }}>
-                  <div>
-                    <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>План</div>
-                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2898ff', whiteSpace: 'nowrap' }}>
-                      {smrPlan.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Факт</div>
-                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2de2a6', whiteSpace: 'nowrap' }}>
-                      {smrFact.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Выполнение</div>
-                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ff9b45', whiteSpace: 'nowrap' }}>
-                      {smrPlan > 0 ? ((smrFact / smrPlan) * 100).toFixed(1) : '0'}%
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        </div>
 
           {/* Sections chart */}
           <div style={{ ...card, marginBottom: '16px' }}>
@@ -729,45 +773,6 @@ export default function App() {
                 </div>
               );
             })()}
-          </div>
-
-          {/* Table */}
-          <div style={card}>
-            <div style={{ ...lbl, marginBottom: '12px' }}>Детализация по участкам</div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ color: '#6b7280', textAlign: 'left', borderBottom: '1px solid #1d2d24' }}>
-                    <th style={{ padding: '8px' }}>Участок</th>
-                    <th style={{ padding: '8px' }}>Подрядчик</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>План, км</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Факт, км</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Откл, км</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>%</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered
-                    .filter(r => (toNum(r["План км"]) || 0) > 0 || (toNum(r["Факт км"]) || 0) > 0)
-                    .map((r, i) => {
-                      const plan = toNum(r["План км"]);
-                      const fact = toNum(r["Факт км"]);
-                      const dev = fact - plan;
-                      const pct = plan > 0 ? ((fact / plan) * 100).toFixed(1) : 0;
-                      return (
-                        <tr key={i} style={{ borderBottom: '1px solid #16251e' }}>
-                          <td style={{ padding: '8px', color: '#e5e7eb' }}>{r["Участок"]}</td>
-                          <td style={{ padding: '8px', color: '#9ca3af' }}>{r["Подрядчик"]}</td>
-                          <td style={{ padding: '8px', textAlign: 'right', color: '#2898ff' }}>{plan.toFixed(1)}</td>
-                          <td style={{ padding: '8px', textAlign: 'right', color: '#2de2a6' }}>{fact.toFixed(1)}</td>
-                          <td style={{ padding: '8px', textAlign: 'right', color: dev >= 0 ? '#2de2a6' : '#ff4d4d' }}>{dev > 0 ? '+' : ''}{dev.toFixed(1)}</td>
-                          <td style={{ padding: '8px', textAlign: 'right', color: '#ff9b45' }}>{pct}%</td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
           </div>
         </>
       )}
