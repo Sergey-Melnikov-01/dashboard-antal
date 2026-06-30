@@ -21,6 +21,12 @@ const toNum = v => {
   const n = Number(v);
   return isNaN(n) ? 0 : n;
 };
+// Функция для красивого форматирования валюты
+const formatCurrency = (val) => {
+  if (!val && val !== 0) return '0 тнг';
+  // Форматируем число с пробелами (например, 1 200 000) и добавляем тнг
+  return Math.round(val).toLocaleString('ru-RU') + ' тнг';
+};
 
 // Custom dark tooltip for PIR chart
 const PirTooltip = ({ active, payload }) => {
@@ -728,11 +734,16 @@ export default function App() {
                   <div style={{ width: '100%', marginTop: 'auto' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #1d2d24' }}>
                       <span style={{ fontSize: '14px', color: '#9ca3af' }}>План</span>
-                      <span style={{ fontSize: '20px', fontWeight: '800', color: '#2898ff' }}>{item.plan.toLocaleString()}</span>
+                      <span style={{ fontSize: '20px', fontWeight: '800', color: '#2898ff' }}>{Math.round(item.plan || 0).toLocaleString('ru-RU')}
+                      <span style={{ fontSize: '14px', fontWeight: '600', marginLeft: '4px' }}>тнг
+                       </span> 
+                      </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
                       <span style={{ fontSize: '14px', color: '#9ca3af' }}>Факт</span>
-                      <span style={{ fontSize: '20px', fontWeight: '800', color: '#2de2a6' }}>{item.fact.toLocaleString()}</span>
+                      <span style={{ fontSize: '20px', fontWeight: '800', color: '#2de2a6' }}>{Math.round(item.fact || 0).toLocaleString('ru-RU')}
+                      <span style={{ fontSize: '14px', fontWeight: '600', marginLeft: '4px' }}>тнг</span>
+                      </span>
                     </div>
                   </div>
                 </div>
