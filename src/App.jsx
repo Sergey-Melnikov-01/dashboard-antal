@@ -194,14 +194,17 @@ export default function App() {
     return { totalFact: fact, totalPlan: plan, deviation: dev, totalPercent: pct };
   }, [filtered]);
   // Стоимости: Материалы и СМР
-  const { matPlan, matFact, matDev, smrPlan, smrFact, smrDev } = useMemo(() => {
+  const { matPlan, matFact, matDev, smrPlan, smrFact, smrDev, nzsPlan, nzsFact} = useMemo(() => {
     const mp = filtered.reduce((s, r) => s + toNum(r["Материалы [План]"]), 0);
     const mf = filtered.reduce((s, r) => s + toNum(r["Материалы [Факт]"]), 0);
     const sp = filtered.reduce((s, r) => s + toNum(r["СМР [План]"]), 0);
     const sf = filtered.reduce((s, r) => s + toNum(r["СМР [Факт]"]), 0);
+    const np = filtered.reduce((s, r) => s + toNum(r["Материалы по НЗС [План]"]), 0);
+    const nf = filtered.reduce((s, r) => s + toNum(r["Материалы по НЗС [Факт]"]), 0);
     return {
       matPlan: mp, matFact: mf, matDev: mf - mp,
       smrPlan: sp, smrFact: sf, smrDev: sf - sp,
+      nzsPlan: np, nzsFact: nf
     };
   }, [filtered]);
 
@@ -624,8 +627,13 @@ export default function App() {
           ))}
         </div>
 
-        {/* Charts row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', alignItems: 'stretch' }}>
+          {/* Charts row */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: (nzsPlan > 0 || nzsFact > 0) ? '1fr 2fr' : '1fr 1fr', 
+            gap: '16px', 
+            marginBottom: '16px', 
+            alignItems: 'stretch' }}>
           
           {/* График динамики */}
           <div style={card}>
@@ -665,10 +673,15 @@ export default function App() {
             </ResponsiveContainer>
           </div>
 
-          {/* Правая часть: 2 карточки со спидометрами */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            
+          {/* Правая часть: карточки со спидометрами (теперь их может быть 2 или 3) */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: (nzsPlan > 0 || nzsFact > 0) ? '1fr 1fr 1fr' : '1fr 1fr', 
+            gap: '16px' 
+          }}>
             {[
+              // Если есть данные по НЗС, добавляем их первым элементом в массив
+              ...(nzsPlan > 0 || nzsFact > 0 ? [{ label: 'Материалы по НЗС', plan: nzsPlan, fact: nzsFact }] : []),
               { label: 'Материалы', plan: matPlan, fact: matFact },
               { label: 'СМР', plan: smrPlan, fact: smrFact }
             ].map((item, idx) => {
@@ -681,13 +694,10 @@ export default function App() {
               return (
                 <div key={idx} style={{ ...card, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '20px 16px 16px' }}>
                   
-                  {/* Заголовок */}
                   <div style={{ ...lbl, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>{item.label}</div>
 
-                  {/* Спидометр — увеличенный */}
-                  <div style={{ position: 'relative', width: '250px', height: '140px', display: 'flex', justifyContent: 'center', alignItems: 'flex-end', margin: '0 0 10px 0' }}>
-                    <svg width="250" height="145" viewBox="0 0 250 145">
-                      {/* Подложка — синяя дуга (цвет совпадает с цифрами плана) */}
+                  <div style={{ position: 'relative', width: '100%', height: '140px', display: 'flex', justifyContent: 'center', alignItems: 'flex-end', margin: '0 0 10px 0' }}>
+                    <svg width="100%" height="100%" viewBox="0 0 250 145" preserveAspectRatio="xMidYMid meet">
                       <path
                         d="M 15 130 A 110 110 0 0 1 235 130"
                         fill="none"
@@ -696,7 +706,6 @@ export default function App() {
                         strokeLinecap="round"
                         opacity="0.25"
                       />
-                      {/* Факт — зелёная дуга */}
                       <path
                         d="M 15 130 A 110 110 0 0 1 235 130"
                         fill="none"
@@ -708,7 +717,6 @@ export default function App() {
                         style={{ transition: 'stroke-dashoffset 1s ease-out' }}
                       />
                     </svg>
-                    {/* Процент в центре дуги */}
                     <div style={{ position: 'absolute', bottom: '10px', fontSize: '42px', fontWeight: '900', 
                       color: (item.fact / item.plan) > 1.0 ? '#ff4d4d' : '#ff9b45',
                        lineHeight: 1
@@ -717,7 +725,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* План и Факт — прижаты к низу, крупный шрифт */}
                   <div style={{ width: '100%', marginTop: 'auto' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #1d2d24' }}>
                       <span style={{ fontSize: '14px', color: '#9ca3af' }}>План</span>
@@ -728,7 +735,6 @@ export default function App() {
                       <span style={{ fontSize: '20px', fontWeight: '800', color: '#2de2a6' }}>{item.fact.toLocaleString()}</span>
                     </div>
                   </div>
-
                 </div>
               );
             })}
@@ -927,13 +933,13 @@ export default function App() {
               <div style={{ ...card }}>
                 <div style={lbl}>Кабель (план)</div>
                 <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2898ff' }}>
-                  {metricsKPI.cablePlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                  {metricsKPI.cablePlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
                 </div>
               </div>
               <div style={{ ...card }}>
                 <div style={lbl}>Труба (план)</div>
                 <div style={{ fontSize: '22px', fontWeight: '700', color: '#2898ff' }}>
-                  {metricsKPI.pipePlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                  {metricsKPI.pipePlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
                 </div>
               </div>
             </div>
@@ -943,13 +949,13 @@ export default function App() {
               <div style={{ ...card }}>
                 <div style={lbl}>Кабель (факт)</div>
                 <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2de2a6' }}>
-                  {metricsKPI.cableFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                  {metricsKPI.cableFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
                 </div>
               </div>
               <div style={{ ...card }}>
                 <div style={lbl}>Труба (факт)</div>
                 <div style={{ fontSize: '22px', fontWeight: '700', color: '#2de2a6' }}>
-                  {metricsKPI.pipeFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                  {metricsKPI.pipeFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
                 </div>
               </div>
             </div>
@@ -959,13 +965,13 @@ export default function App() {
               <div style={{ ...card }}>
                 <div style={lbl}>Отклонение кабеля</div>
                 <div style={{ fontSize: '22px', fontWeight: 'bold', color: metricsKPI.cableDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
-                  {(metricsKPI.cableDev > 0 ? '+' : '') + metricsKPI.cableDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                  {(metricsKPI.cableDev > 0 ? '+' : '') + metricsKPI.cableDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
                 </div>
               </div>
               <div style={{ ...card }}>
                 <div style={lbl}>Отклонение трубы</div>
                 <div style={{ fontSize: '22px', fontWeight: '700', color: metricsKPI.pipeDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
-                  {(metricsKPI.pipeDev > 0 ? '+' : '') + metricsKPI.pipeDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                  {(metricsKPI.pipeDev > 0 ? '+' : '') + metricsKPI.pipeDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
                 </div>
               </div>
             </div>
@@ -976,19 +982,19 @@ export default function App() {
             <div style={card}>
               <div style={lbl}>Засыпка (план)</div>
               <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2898ff' }}>
-                {metricsKPI.backfillPlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                {metricsKPI.backfillPlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
               </div>
             </div>
             <div style={card}>
               <div style={lbl}>Засыпка (факт)</div>
               <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2de2a6' }}>
-                {metricsKPI.backfillFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                {metricsKPI.backfillFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
               </div>
             </div>
             <div style={card}>
               <div style={lbl}>Отклонение засыпки</div>
               <div style={{ fontSize: '22px', fontWeight: 'bold', color: metricsKPI.backfillDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
-                {(metricsKPI.backfillDev > 0 ? '+' : '') + metricsKPI.backfillDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                {(metricsKPI.backfillDev > 0 ? '+' : '') + metricsKPI.backfillDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
               </div>
             </div>
           </div>
@@ -998,19 +1004,19 @@ export default function App() {
             <div style={card}>
               <div style={lbl}>ГНБ (план)</div>
               <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2898ff' }}>
-                {metricsKPI.hddPlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                {metricsKPI.hddPlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
               </div>
             </div>
             <div style={card}>
               <div style={lbl}>ГНБ (факт)</div>
               <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2de2a6' }}>
-                {metricsKPI.hddFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                {metricsKPI.hddFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
               </div>
             </div>
             <div style={card}>
               <div style={lbl}>Отклонение ГНБ</div>
               <div style={{ fontSize: '22px', fontWeight: 'bold', color: metricsKPI.hddDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
-                {(metricsKPI.hddDev > 0 ? '+' : '') + metricsKPI.hddDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
+                {(metricsKPI.hddDev > 0 ? '+' : '') + metricsKPI.hddDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
               </div>
             </div>
           </div>
