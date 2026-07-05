@@ -92,6 +92,8 @@ export default function App() {
   const [metricsData, setMetricsData] = useState([]);
   const [pirData, setPirData] = useState([]); // <-- added state for DB_PIR
   const [pirMode, setPirMode] = useState('psd');
+  const [tmcData, setTmcData] = useState([]);
+  const [materialView, setMaterialView] = useState('stock');
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('construction'); // 'construction' | 'schedule' (metrics)
   const [animatingTab, setAnimatingTab] = useState(null);
@@ -144,6 +146,8 @@ export default function App() {
 
       // PIR data (if present in payload)
       setPirData(Array.isArray(raw?.DB_PIR) ? raw.DB_PIR : []);
+      // TMC (новое)
+      setTmcData(Array.isArray(raw?.DB_TMC) ? raw.DB_TMC : []);
 
       setLoading(false);
     }).catch(err => {
@@ -267,6 +271,12 @@ export default function App() {
     )];
   }, [metricsData, selectedBranch, selectedContractor]);
 
+  const tmcSections = useMemo(() => {
+  const s = [...new Set((tmcData || []).map(r => r["Участок"]).filter(Boolean))];
+  // если в tmc нет участков — падаем обратно на список из СМР
+  return s.length ? s : sections;
+  }, [tmcData, sections]);
+
   const metricsFiltered = useMemo(() => {
     return metricsData.filter(r => {
       if (!r) return false;
@@ -277,6 +287,100 @@ export default function App() {
       return true;
     });
   }, [metricsData, metricActiveDate, selectedBranch, selectedContractor, selectedSection]);
+
+  const filteredTmc = useMemo(() => {
+  return (tmcData || []).filter(r => {
+    if (!r) return false;
+    // опционально поддерживаем поле "Дата отчета"
+    if (r["Дата отчета"] && activeDate && r["Дата отчета"] !== activeDate) return false;
+    if (selectedBranch !== 'Все' && r["Ветка"] && r["Ветка"] !== selectedBranch) return false;
+    if (selectedContractor !== 'Все' && r["Подрядчик"] && r["Подрядчик"] !== selectedContractor) return false;
+    if (selectedSection !== 'Все' && r["Участок"] && r["Участок"] !== selectedSection) return false;
+    return true;
+  });
+}, [tmcData, activeDate, selectedBranch, selectedContractor, selectedSection]);
+
+// helper: нормализация строк
+const norm = s => (s || '').toString().trim();
+
+// Скелет для обнаружения материалов: находим пары "X План"/"X Факт" или отдельные числовые колонки
+const tmcMaterialBases = useMemo(() => {
+  if (!filteredTmc.length) return [];
+
+  const first = filteredTmc[0];
+  const keys = Object.keys(first || {}).map(k => k.toString().trim()).filter(Boolean);
+
+  // Игнорируем мета‑поля
+  const ignore = new Set(['Участок','Подрядчик','Ветка','Дата отчета','Дата','ID','Ид','Примечание']);
+
+  // 1) собираем пары по шаблону "БАЗА План" / "БАЗА Факт"
+  const baseMap = {}; // base -> { planKey, factKey, sampleKey }
+  keys.forEach(k => {
+    if (ignore.has(k)) return;
+    const m = k.match(/(.+?)\s*(План|ПЛАН|план|Факт|ФАКТ|факт)\s*$/i);
+    if (m) {
+      const base = m[1].trim();
+      const suffix = m[2].toLowerCase();
+      baseMap[base] = baseMap[base] || { planKey: null, factKey: null, sampleKey: null };
+      if (/план/i.test(suffix)) baseMap[base].planKey = k;
+      if (/факт/i.test(suffix)) baseMap[base].factKey = k;
+      baseMap[base].sampleKey = baseMap[base].sampleKey || k;
+    }
+  });
+
+  // 2) если пар не хватает — ищем чисто числовые колонки (не содержащие 'план'/'факт')
+  const numericKeys = keys.filter(k => {
+    if (ignore.has(k)) return false;
+    if (/план|факт/i.test(k)) return false;
+    // считаем числовой, если хотя бы для одной строки значение можно привести к числу != NaN
+    return filteredTmc.some(r => {
+      const v = r[k];
+      if (v === null || v === undefined || v === '') return false;
+      return !isNaN(Number(String(v).replace(',', '.')));
+    });
+  });
+
+  // Формируем финальный список баз (сначала пары, потом одиночки)
+  const bases = Object.keys(baseMap).map(b => ({
+    base: b,
+    planKey: baseMap[b].planKey,
+    factKey: baseMap[b].factKey,
+    sampleKey: baseMap[b].sampleKey
+  }));
+
+  // Добавляем одиночные numericKeys как отдельные базы (если ещё не включены)
+  numericKeys.forEach(k => {
+    // если ключ уже присутствует как sampleKey — пропускаем
+    const exists = bases.some(b => b.sampleKey === k || b.planKey === k || b.factKey === k);
+    if (!exists) {
+      bases.push({ base: k, planKey: null, factKey: k, sampleKey: k });
+    }
+  });
+
+  // Ограничим до 7 элементов
+  return bases.slice(0, 7);
+}, [filteredTmc]);
+
+// KPI по материалам — суммируем значения (используем toNum)
+const tmcMaterialKPIs = useMemo(() => {
+  return tmcMaterialBases.map(b => {
+    const planSum = (b.planKey)
+      ? filteredTmc.reduce((s, r) => s + toNum(r[b.planKey]), 0)
+      : 0;
+    const factSum = (b.factKey)
+      ? filteredTmc.reduce((s, r) => s + toNum(r[b.factKey]), 0)
+      : 0;
+    const dev = +(factSum - planSum).toFixed(2);
+    const pct = planSum > 0 ? +((factSum / planSum) * 100).toFixed(1) : (factSum > 0 ? 100 : 0);
+    return {
+      label: b.base,
+      plan: +planSum.toFixed(1),
+      fact: +factSum.toFixed(1),
+      deviation: dev,
+      pct
+    };
+  });
+}, [tmcMaterialBases, filteredTmc]);
 
   // KPI for metrics — now includes pct for all groups
   const metricsKPI = useMemo(() => {
@@ -509,14 +613,21 @@ export default function App() {
                 return `Все ${label.toLowerCase()}`;
               })()}
             </div>
-            {options.map(opt => (
-              <div
-                key={opt}
-                className={`push-dropdown-item ${value === opt ? 'selected' : ''}`}
-                onClick={() => { onChange(opt); setOpenDropdown(null); }}
-              >
-                {opt}
-              </div>
+            {options
+              .filter(opt => {
+                if (!opt && opt !== 0) return false;
+                const t = String(opt).trim().toLowerCase();
+                // Убираем дубликаты "все" и пустые значения
+                return t !== 'все' && t !== 'все участки' && t !== 'все ветки' && t !== 'все подрядчики';
+              })
+              .map(opt => (
+                <div
+                  key={opt}
+                  className={`push-dropdown-item ${value === opt ? 'selected' : ''}`}
+                  onClick={() => { onChange(opt); setOpenDropdown(null); }}
+                >
+                  {opt}
+                </div>
             ))}
           </div>                        
         )}
@@ -1082,6 +1193,92 @@ export default function App() {
           </div>
         </>
       )}
+
+      {activeTab === 'materials' && (
+  <>
+          {/* кнопки */}
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+            <button
+              onClick={() => setMaterialView('stock')}
+              className={`bubbly-button ${materialView === 'stock' ? 'active' : ''}`}
+              style={{ padding: '8px 14px' }}
+            >
+              Материалы со склада
+            </button>
+
+            <button
+              onClick={() => setMaterialView('purchased')}
+              className={`bubbly-button ${materialView === 'purchased' ? 'active' : ''}`}
+              style={{ padding: '8px 14px' }}
+            >
+              Закупаемые материалы
+            </button>
+          </div>
+
+          {/* Фильтр Участок для ТМЦ */}
+          <div
+            style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px', alignItems: 'flex-start' }}
+            onClick={e => { if (e.target === e.currentTarget) setOpenDropdown(null); }}
+          >
+            <PushDropdown
+              name="section_tmc"
+              label="Участок"
+              value={selectedSection}
+              options={tmcSections}
+              onChange={v => {
+                setSelectedSection(v);
+                setOpenDropdown(null);
+
+                if (v !== 'Все') {
+                  const row = (tmcData || []).find(r => r["Участок"] === v);
+                  if (row) {
+                    if (row["Подрядчик"]) setSelectedContractor(row["Подрядчик"]);
+                    if (row["Ветка"]) setSelectedBranch(row["Ветка"]);
+                  }
+                } else {
+                  setSelectedContractor('Все');
+                  setSelectedBranch('Все');
+                }
+              }}
+            />
+          </div>
+
+          {/* Здесь рендерим карточки KPI / таблицу материалов */}
+          {/* ... */}
+        </>
+      )}
+
+      {materialView === 'stock' && (
+  <>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+      {tmcMaterialKPIs.length ? tmcMaterialKPIs.map((m, idx) => (
+        <div key={idx} style={card}>
+          <div style={lbl}>{m.label}</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#2898ff' }}>{m.plan.toLocaleString('ru-RU')}</div>
+            <div style={{ fontSize: 13, color: '#9ca3af' }}>План</div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#2de2a6' }}>{m.fact.toLocaleString('ru-RU')}</div>
+            <div style={{ fontSize: 13, color: '#9ca3af' }}>Факт</div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: m.deviation < 0 ? '#ff4d4d' : '#ff9b45' }}>
+              {(m.deviation > 0 ? '+' : '') + m.deviation.toLocaleString('ru-RU')}
+            </div>
+            <div style={{ fontSize: 13, color: '#9ca3af' }}>{m.pct}%</div>
+          </div>
+        </div>
+      )) : (
+        <div style={{ ...card, gridColumn: '1 / -1', textAlign: 'center', color: '#9ca3af' }}>
+          Нет данных по материалам для выбранных фильтров
+        </div>
+      )}
+    </div>
+
+    {/* Можно оставить таблицу/детализацию ниже при необходимости */}
+  </>
+)}
 
       {activeTab !== 'construction' && activeTab !== 'schedule' && activeTab !== 'pir' && (
         <div style={{ ...card, alignItems: 'center', justifyContent: 'center', minHeight: '300px', textAlign: 'center' }}>
