@@ -187,8 +187,8 @@ const TmcBarSvg = ({ data }) => {
         {data.map((item, i) => {
           const gx = PAD_LEFT + i * groupW;
           const cx = gx + groupCenter;
-          const factX = cx - BAR_W - BAR_GAP / 2;
-          const planX = cx + BAR_GAP / 2;
+          const planX = cx - BAR_W - BAR_GAP / 2;
+          const factX = cx + BAR_GAP / 2;
           const factH = scaleH(item.fact);
           const planH = scaleH(item.plan);
           const [line1, line2] = splitLabel(item.name);
@@ -1328,12 +1328,12 @@ export default function App() {
                 <div style={lbl}>{tmcMode === 'sklad' ? '📦 Материалы — Склад' : '🛒 Материалы — Закуп'}</div>
                 <div style={{ display: 'flex', gap: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
-                    <div style={{ width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(180deg, #2de2a6, #0a7050)' }} />
-                    Факт
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
                     <div style={{ width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(180deg, #5ab4ff, #0a4590)' }} />
                     План
+                  </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
+                    <div style={{ width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(180deg, #2de2a6, #0a7050)' }} />
+                    Факт
                   </div>
                 </div>
               </div>
