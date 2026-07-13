@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
   LineChart, Line
@@ -272,8 +272,10 @@ export default function App() {
   }, [activeTab]);
 
   useEffect(() => {
-    axios.get(API_URL).then(res => {
-      const raw = res.data || {};
+    fetch(API_URL)
+      .then(res => res.json())
+      .then(rawData => {
+      const raw = rawData || {};
 
       // СМР
       setAllData(Array.isArray(raw?.DB_SMR) ? raw.DB_SMR : []);
