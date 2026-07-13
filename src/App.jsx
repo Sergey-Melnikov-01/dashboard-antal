@@ -244,23 +244,22 @@ const TmcBarSvg = ({ data }) => {
 // Горизонтальный SVG-график для одного материала
 const TmcBarSvgHorizontal = ({ data }) => {
   if (!data || data.length === 0) return null;
-  const item = data[0];
-  const maxVal = Math.max(item.plan, item.fact, 1);
+  const maxVal = Math.max(...data.flatMap(d => [d.plan, d.fact]), 1);
 
   const TOTAL_W = 900;
-  const TOTAL_H = 190;
   const PAD_LEFT = 16;
   const PAD_RIGHT = 110;
-  const LABEL_COL_W = 72;   // только для «План» / «Факт»
+  const LABEL_COL_W = 72;
   const BAR_AREA_W = TOTAL_W - PAD_LEFT - LABEL_COL_W - PAD_RIGHT;
-  const BAR_H = 40;
-  const GAP = 18;
-  const PAD_TOP = 14;
-  const NAME_H = 30;
+  const BAR_H = 36;
+  const PLAN_FACT_GAP = 14;
+  const NAME_H = 28;
+  const ITEM_GAP = 20;
+  const PAD_TOP = 12;
 
+  const ITEM_H = NAME_H + BAR_H + PLAN_FACT_GAP + BAR_H;
+  const TOTAL_H = PAD_TOP + data.length * ITEM_H + (data.length - 1) * ITEM_GAP + 12;
   const barX = PAD_LEFT + LABEL_COL_W;
-  const planY = PAD_TOP + NAME_H;
-  const factY = planY + BAR_H + GAP;
 
   const scaleW = (val) => !val ? 0 : Math.max((val / maxVal) * BAR_AREA_W, 2);
   const fmt = (n) => {
@@ -269,11 +268,7 @@ const TmcBarSvgHorizontal = ({ data }) => {
     if (n >= 1000) return (n / 1000).toFixed(1) + 'к';
     return Math.round(n).toString();
   };
-
-  const planW = scaleW(item.plan);
-  const factW = scaleW(item.fact);
   const r = 8;
-
   const roundedRightRect = (x, y, w, h, radius) => {
     if (w <= 0) return '';
     const rr = Math.min(radius, h / 2, w / 2);
@@ -294,37 +289,48 @@ const TmcBarSvgHorizontal = ({ data }) => {
           </linearGradient>
         </defs>
 
-        {/* Название материала — по центру сверху */}
-        <text x={TOTAL_W / 2} y={PAD_TOP + 16} textAnchor="middle"
-          fill="#e5e7eb" fontSize={15} fontWeight={700}>
-          {item.name}
-        </text>
-
-        {/* Метка «План» слева */}
-        <text x={barX - 10} y={planY + BAR_H / 2 + 5}
-          textAnchor="end" fill="#5ab4ff" fontSize={13} fontWeight={700}>
-          План
-        </text>
-        {/* Бар план */}
-        {planW > 0 && <path d={roundedRightRect(barX, planY, planW, BAR_H, r)} fill="url(#hGradPlan)" />}
-        {/* Значение справа от бара */}
-        <text x={barX + planW + 12} y={planY + BAR_H / 2 + 5}
-          textAnchor="start" fill="#5ab4ff" fontSize={15} fontWeight={800}>
-          {fmt(item.plan)}
-        </text>
-
-        {/* Метка «Факт» слева */}
-        <text x={barX - 10} y={factY + BAR_H / 2 + 5}
-          textAnchor="end" fill="#2de2a6" fontSize={13} fontWeight={700}>
-          Факт
-        </text>
-        {/* Бар факт */}
-        {factW > 0 && <path d={roundedRightRect(barX, factY, factW, BAR_H, r)} fill="url(#hGradFact)" />}
-        {/* Значение справа от бара */}
-        <text x={barX + factW + 12} y={factY + BAR_H / 2 + 5}
-          textAnchor="start" fill="#2de2a6" fontSize={15} fontWeight={800}>
-          {fmt(item.fact)}
-        </text>
+        {data.map((item, idx) => {
+          const itemY = PAD_TOP + idx * (ITEM_H + ITEM_GAP);
+          const planY = itemY + NAME_H;
+          const factY = planY + BAR_H + PLAN_FACT_GAP;
+          const planW = scaleW(item.plan);
+          const factW = scaleW(item.fact);
+          return (
+            <g key={idx}>
+              {/* Разделитель между элементами */}
+              {idx > 0 && (
+                <line x1={PAD_LEFT} y1={itemY - ITEM_GAP / 2}
+                  x2={TOTAL_W - PAD_RIGHT} y2={itemY - ITEM_GAP / 2}
+                  stroke="#1d2d24" strokeWidth={1} />
+              )}
+              {/* Название */}
+              <text x={TOTAL_W / 2} y={itemY + 18} textAnchor="middle"
+                fill="#e5e7eb" fontSize={14} fontWeight={700}>
+                {item.name}
+              </text>
+              {/* План */}
+              <text x={barX - 10} y={planY + BAR_H / 2 + 5}
+                textAnchor="end" fill="#5ab4ff" fontSize={12} fontWeight={700}>
+                План
+              </text>
+              {planW > 0 && <path d={roundedRightRect(barX, planY, planW, BAR_H, r)} fill="url(#hGradPlan)" />}
+              <text x={barX + planW + 12} y={planY + BAR_H / 2 + 5}
+                textAnchor="start" fill="#5ab4ff" fontSize={14} fontWeight={800}>
+                {fmt(item.plan)}
+              </text>
+              {/* Факт */}
+              <text x={barX - 10} y={factY + BAR_H / 2 + 5}
+                textAnchor="end" fill="#2de2a6" fontSize={12} fontWeight={700}>
+                Факт
+              </text>
+              {factW > 0 && <path d={roundedRightRect(barX, factY, factW, BAR_H, r)} fill="url(#hGradFact)" />}
+              <text x={barX + factW + 12} y={factY + BAR_H / 2 + 5}
+                textAnchor="start" fill="#2de2a6" fontSize={14} fontWeight={800}>
+                {fmt(item.fact)}
+              </text>
+            </g>
+          );
+        })}
       </svg>
     </div>
   );
@@ -1479,7 +1485,7 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              {selectedTmcMaterial !== 'Все' && tmcChartData.length === 1
+              {tmcChartData.length <= 3
                 ? <TmcBarSvgHorizontal data={tmcChartData} />
                 : <TmcBarSvg data={tmcChartData} />
               }
