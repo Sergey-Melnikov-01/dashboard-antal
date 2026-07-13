@@ -87,11 +87,157 @@ const ProgressBar = ({ label, plan, fact, pct, unit }) => {
   );
 };
 
+// -----------------------------
+// ТМЦ — вспомогательные функции
+// -----------------------------
+
+// Возвращает название участка из строки TMC (обрабатывает trailing space)
+const getTmcUch = (row) => String(row["Участок "] || row["Участок"] || '').trim();
+
+// Динамически детектирует пары [План]/[Факт] колонок из данных
+const detectMaterials = (data) => {
+  if (!data?.length) return [];
+  const sample = data.find(r => r && Object.keys(r).length > 1);
+  if (!sample) return [];
+  const materials = [];
+  Object.keys(sample).forEach(key => {
+    const trimKey = key.trim();
+    if (trimKey.includes('[') && (trimKey.endsWith('[План]') || trimKey.endsWith('[ План]') || trimKey.endsWith('[план]'))) {
+      const name = trimKey.replace(/\s*\[[\s]*[Пп]лан[\s]*\]$/, '').trim();
+      const factKey = Object.keys(sample).find(k => {
+        const t = k.trim();
+        return t.startsWith(name) && (t.endsWith('[Факт]') || t.endsWith('[ Факт]') || t.endsWith('[факт]'));
+      });
+      if (factKey) {
+        materials.push({ name, planKey: key, factKey });
+      }
+    }
+  });
+  return materials;
+};
+
+// SVG path для прямоугольника с закруглёнными верхними углами
+const roundedTopRect = (x, y, w, h, r) => {
+  if (h <= 0) return '';
+  const actualR = Math.min(r, h / 2, w / 2);
+  return `M ${x + actualR},${y} L ${x + w - actualR},${y} Q ${x + w},${y} ${x + w},${y + actualR} L ${x + w},${y + h} L ${x},${y + h} L ${x},${y + actualR} Q ${x},${y} ${x + actualR},${y} Z`;
+};
+
+// Кастомный SVG-график для ТМЦ: вертикальные бары (факт слева, план справа)
+const TmcBarSvg = ({ data }) => {
+  if (!data || data.length === 0) return null;
+  const maxVal = Math.max(...data.flatMap(d => [d.plan, d.fact]), 1);
+
+  // Фиксированный viewBox — одинаковый для Склада и Закупа
+  const TOTAL_W = 1300;
+  const PAD_LEFT = 10;
+  const PAD_RIGHT = 10;
+  const PAD_TOP = 36;
+  const CHART_H = 220;
+  const LABEL_H = 52;
+  const svgH = PAD_TOP + CHART_H + LABEL_H;
+  const baseY = PAD_TOP + CHART_H;
+
+  // Рассчитываем размеры баров динамически под количество материалов
+  const usableW = TOTAL_W - PAD_LEFT - PAD_RIGHT;
+  const groupW = usableW / data.length;
+  const BAR_W = Math.max(12, Math.min(44, groupW * 0.30));
+  const BAR_GAP = Math.max(3, BAR_W * 0.12);
+  const groupCenter = groupW / 2;
+
+  const scaleH = (val) => !val || maxVal === 0 ? 0 : Math.max((val / maxVal) * CHART_H, 2);
+  const fmt = (n) => {
+    if (!n) return '0';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'М';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'к';
+    return Math.round(n).toString();
+  };
+
+  // Обрезаем название до нужной длины
+  const truncate = (str, maxLen) => str.length > maxLen ? str.substring(0, maxLen - 1) + '…' : str;
+
+  // Делим длинное название на 2 строки
+  const splitLabel = (name) => {
+    const maxChars = 14;
+    if (name.length <= maxChars) return [name, null];
+    // Ищем пробел для переноса
+    const mid = Math.floor(name.length / 2);
+    let splitIdx = name.lastIndexOf(' ', mid + 4);
+    if (splitIdx < 3) splitIdx = mid;
+    return [name.substring(0, splitIdx), name.substring(splitIdx).trim()];
+  };
+
+  return (
+    <div style={{ paddingBottom: 4 }}>
+      <svg width="100%" viewBox={`0 0 ${TOTAL_W} ${svgH}`} style={{ display: 'block' }}>
+        <defs>
+          <linearGradient id="tmcGradFact" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#2de2a6" />
+            <stop offset="100%" stopColor="#0a7050" />
+          </linearGradient>
+          <linearGradient id="tmcGradPlan" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#5ab4ff" />
+            <stop offset="100%" stopColor="#0a4590" />
+          </linearGradient>
+        </defs>
+
+        {/* Baseline */}
+        <line x1={PAD_LEFT} y1={baseY} x2={TOTAL_W - PAD_RIGHT} y2={baseY} stroke="#2a2b3a" strokeWidth={1} />
+
+        {data.map((item, i) => {
+          const gx = PAD_LEFT + i * groupW;
+          const cx = gx + groupCenter;
+          const factX = cx - BAR_W - BAR_GAP / 2;
+          const planX = cx + BAR_GAP / 2;
+          const factH = scaleH(item.fact);
+          const planH = scaleH(item.plan);
+          const [line1, line2] = splitLabel(item.name);
+
+          return (
+            <g key={i}>
+              {/* Fact bar (LEFT, teal) */}
+              {factH > 0 && (
+                <>
+                  <path d={roundedTopRect(factX, baseY - factH, BAR_W, factH, 6)} fill="url(#tmcGradFact)" />
+                  <text x={factX + BAR_W / 2} y={baseY - factH - 5} textAnchor="middle" fill="#2de2a6" fontSize={10} fontWeight={700}>{fmt(item.fact)}</text>
+                </>
+              )}
+
+              {/* Plan bar (RIGHT, blue) */}
+              {planH > 0 && (
+                <>
+                  <path d={roundedTopRect(planX, baseY - planH, BAR_W, planH, 6)} fill="url(#tmcGradPlan)" />
+                  <text x={planX + BAR_W / 2} y={baseY - planH - 5} textAnchor="middle" fill="#5ab4ff" fontSize={10} fontWeight={700}>{fmt(item.plan)}</text>
+                </>
+              )}
+
+              {/* Название: 1 или 2 строки */}
+              <text x={cx} y={baseY + 16} textAnchor="middle" fill="#cbd5e1" fontSize={11} fontWeight={500}>
+                {line1}
+              </text>
+              {line2 && (
+                <text x={cx} y={baseY + 30} textAnchor="middle" fill="#cbd5e1" fontSize={11} fontWeight={500}>
+                  {truncate(line2, 15)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
 export default function App() {
   const [allData, setAllData] = useState([]);
   const [metricsData, setMetricsData] = useState([]);
   const [pirData, setPirData] = useState([]); // <-- added state for DB_PIR
   const [pirMode, setPirMode] = useState('psd');
+  const [tmcMode, setTmcMode] = useState('sklad'); // 'sklad' | 'zakup'
+  const [tmcData, setTmcData] = useState([]);
+  const [tmcDvaData, setTmcDvaData] = useState([]);
+  const [selectedTmcSection, setSelectedTmcSection] = useState('Все');
+  const [selectedTmcMaterial, setSelectedTmcMaterial] = useState('Все');
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('construction'); // 'construction' | 'schedule' (metrics)
   const [animatingTab, setAnimatingTab] = useState(null);
@@ -144,6 +290,13 @@ export default function App() {
 
       // PIR data (if present in payload)
       setPirData(Array.isArray(raw?.DB_PIR) ? raw.DB_PIR : []);
+
+      // ТМЦ
+      console.log('Все ключи API:', Object.keys(raw));
+      setTmcData(Array.isArray(raw?.DB_TMC) ? raw.DB_TMC : []);
+      const tmcDvaKey = Object.keys(raw).find(k => k.toUpperCase().includes('TMCDVA') || k.toUpperCase().includes('TMC2') || k.toUpperCase() === 'DB_TMCDVA');
+      console.log('Ключ TMCdva:', tmcDvaKey, '| Данные:', tmcDvaKey ? raw[tmcDvaKey]?.length : 0);
+      setTmcDvaData(tmcDvaKey && Array.isArray(raw[tmcDvaKey]) ? raw[tmcDvaKey] : []);
 
       setLoading(false);
     }).catch(err => {
@@ -330,6 +483,43 @@ export default function App() {
     });
     return Object.values(map).sort((a, b) => b.cablePlan + b.cableFact - (a.cablePlan + a.cableFact));
   }, [metricsFiltered]);
+
+  // -----------------------------
+  // ТМЦ (DB_TMC / DB_TMCdva)
+  // -----------------------------
+  // ТМЦ: активный датасет
+  const currentTmcData = useMemo(() => {
+    return tmcMode === 'sklad' ? tmcData : tmcDvaData;
+  }, [tmcMode, tmcData, tmcDvaData]);
+
+  // ТМЦ: список участков
+  const tmcSections = useMemo(() => {
+    return [...new Set(currentTmcData.map(r => getTmcUch(r)).filter(v => v && v !== 'Общее количество' && !v.startsWith('Unnamed')))].sort();
+  }, [currentTmcData]);
+
+  // ТМЦ: детектированные материалы
+  const tmcMaterials = useMemo(() => {
+    return detectMaterials(currentTmcData);
+  }, [currentTmcData]);
+
+  // ТМЦ: данные для графика с агрегацией по участку
+  const tmcChartData = useMemo(() => {
+    const rows = currentTmcData.filter(r => {
+      const uch = getTmcUch(r);
+      return uch && uch !== 'Общее количество' && !uch.startsWith('Unnamed') && uch !== '';
+    });
+    const filteredRows = selectedTmcSection === 'Все'
+      ? rows
+      : rows.filter(r => getTmcUch(r) === selectedTmcSection);
+
+    return tmcMaterials
+      .filter(({ name }) => selectedTmcMaterial === 'Все' || name === selectedTmcMaterial)
+      .map(({ name, planKey, factKey }) => {
+        const plan = filteredRows.reduce((sum, r) => sum + toNum(r[planKey]), 0);
+        const fact = filteredRows.reduce((sum, r) => sum + toNum(r[factKey]), 0);
+        return { name, plan, fact };
+      }).filter(d => d.plan > 0 || d.fact > 0);
+  }, [currentTmcData, selectedTmcSection, tmcMaterials, selectedTmcMaterial]);
 
   // -----------------------------
   // PIR (DB_PIR) — new section (one chart + region filter)
@@ -752,7 +942,8 @@ export default function App() {
           </div>
         </div>
 
-          {/* Sections chart */}
+          {/* Sections chart — показывается только при выбранном участке */}
+          {selectedSection !== 'Все' && (
           <div style={{ ...card, marginBottom: '16px' }}>
             <div style={lbl}>Выработка по участкам (км)</div>
             {(() => {
@@ -768,18 +959,18 @@ export default function App() {
                       data={visibleSections}
                       margin={{ left: 10, right: 60, top: 10, bottom: 10 }}
                     >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" horizontal={false} />
                       <XAxis type="number" hide />
                       <YAxis
                         dataKey="Участок"
                         type="category"
-                        stroke="#4b5563"
+                        axisLine={false}
+                        tickLine={false}
                         fontSize={11}
                         width={140}
                         tick={{ fill: '#9ca3af' }}
                       />
                       <Tooltip
-                        cursor={{ fill: '#15251e' }}
+                        cursor={{ fill: 'rgba(255,255,255,0.04)' }}
                         contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12 }}
                         formatter={(value) => (value != null ? Number(value).toFixed(1) : '')}
                       />
@@ -812,6 +1003,7 @@ export default function App() {
               );
             })()}
           </div>
+          )}
         </>
       )}
 
@@ -1083,7 +1275,73 @@ export default function App() {
         </>
       )}
 
-      {activeTab !== 'construction' && activeTab !== 'schedule' && activeTab !== 'pir' && (
+      {activeTab === 'materials' && (
+        <>
+          {/* Sub-mode buttons */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            {[
+              { id: 'sklad', label: '📦 Склад' },
+              { id: 'zakup', label: '🛒 Закуп' },
+            ].map(btn => (
+              <button
+                key={btn.id}
+                onClick={() => { setTmcMode(btn.id); setSelectedTmcSection('Все'); setSelectedTmcMaterial('Все'); }}
+                className={`bubbly-button ${tmcMode === btn.id ? 'active' : ''}`}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Фильтры: Участок + Материал */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }} onClick={e => { if (e.target === e.currentTarget) setOpenDropdown(null); }}>
+            <PushDropdown
+              name="tmc_section"
+              label="Участок"
+              value={selectedTmcSection}
+              options={tmcSections}
+              onChange={v => setSelectedTmcSection(v)}
+            />
+            <PushDropdown
+              name="tmc_material"
+              label="Материал"
+              value={selectedTmcMaterial}
+              options={tmcMaterials.map(m => m.name)}
+              onChange={v => setSelectedTmcMaterial(v)}
+            />
+          </div>
+
+          {/* Chart area */}
+          {currentTmcData.length === 0 ? (
+            <div style={{ ...card, alignItems: 'center', justifyContent: 'center', minHeight: 220, textAlign: 'center' }}>
+              <div style={{ fontSize: 14, color: '#6b7280' }}>Загрузка данных ТМЦ...</div>
+            </div>
+          ) : tmcChartData.length === 0 ? (
+            <div style={{ ...card, alignItems: 'center', justifyContent: 'center', minHeight: 220, textAlign: 'center' }}>
+              <div style={{ fontSize: 14, color: '#6b7280' }}>Нет данных для отображения (все значения равны 0)</div>
+            </div>
+          ) : (
+            <div style={card}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div style={lbl}>{tmcMode === 'sklad' ? '📦 Материалы — Склад' : '🛒 Материалы — Закуп'}</div>
+                <div style={{ display: 'flex', gap: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
+                    <div style={{ width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(180deg, #2de2a6, #0a7050)' }} />
+                    Факт
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
+                    <div style={{ width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(180deg, #5ab4ff, #0a4590)' }} />
+                    План
+                  </div>
+                </div>
+              </div>
+              <TmcBarSvg data={tmcChartData} />
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab !== 'construction' && activeTab !== 'schedule' && activeTab !== 'pir' && activeTab !== 'materials' && (
         <div style={{ ...card, alignItems: 'center', justifyContent: 'center', minHeight: '300px', textAlign: 'center' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#2de2a6', marginBottom: '8px' }}>В разработке</div>
