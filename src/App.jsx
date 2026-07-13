@@ -134,7 +134,7 @@ const TmcBarSvg = ({ data }) => {
   const PAD_RIGHT = 10;
   const PAD_TOP = 36;
   const CHART_H = 220;
-  const LABEL_H = 52;
+  const LABEL_H = 72;
   const svgH = PAD_TOP + CHART_H + LABEL_H;
   const baseY = PAD_TOP + CHART_H;
 
@@ -157,14 +157,22 @@ const TmcBarSvg = ({ data }) => {
   const truncate = (str, maxLen) => str.length > maxLen ? str.substring(0, maxLen - 1) + '…' : str;
 
   // Делим длинное название на 2 строки
+  const charsPerLine = Math.max(10, Math.floor(groupW / 7.2));
   const splitLabel = (name) => {
-    const maxChars = 14;
-    if (name.length <= maxChars) return [name, null];
-    // Ищем пробел для переноса
-    const mid = Math.floor(name.length / 2);
-    let splitIdx = name.lastIndexOf(' ', mid + 4);
-    if (splitIdx < 3) splitIdx = mid;
-    return [name.substring(0, splitIdx), name.substring(splitIdx).trim()];
+    const words = name.split(' ');
+    const lines = [];
+    let cur = '';
+    for (const w of words) {
+      const next = cur ? cur + ' ' + w : w;
+      if (next.length <= charsPerLine) { cur = next; }
+      else { if (cur) lines.push(cur); cur = w; }
+    }
+    if (cur) lines.push(cur);
+    if (lines.length === 0) return [truncate(name, charsPerLine), null, null];
+    if (lines.length === 1) return [lines[0], null, null];
+    if (lines.length === 2) return [lines[0], lines[1], null];
+    const rest = lines.slice(2).join(' ');
+    return [lines[0], lines[1], truncate(rest, charsPerLine)];
   };
 
   return (
@@ -191,7 +199,7 @@ const TmcBarSvg = ({ data }) => {
           const planX = cx + BAR_GAP / 2;
           const factH = scaleH(item.fact);
           const planH = scaleH(item.plan);
-          const [line1, line2] = splitLabel(item.name);
+          const [line1, line2, line3] = splitLabel(item.name);
 
           return (
             <g key={i}>
@@ -217,7 +225,12 @@ const TmcBarSvg = ({ data }) => {
               </text>
               {line2 && (
                 <text x={cx} y={baseY + 30} textAnchor="middle" fill="#cbd5e1" fontSize={11} fontWeight={500}>
-                  {truncate(line2, 15)}
+                  {line2}
+                </text>
+              )}
+              {line3 && (
+                <text x={cx} y={baseY + 46} textAnchor="middle" fill="#cbd5e1" fontSize={11} fontWeight={500}>
+                  {line3}
                 </text>
               )}
             </g>
@@ -1286,55 +1299,6 @@ export default function App() {
               <div style={{ fontSize: '22px', fontWeight: 'bold', color: metricsKPI.hddDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
                 {(metricsKPI.hddDev > 0 ? '+' : '') + metricsKPI.hddDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>м</span>
               </div>
-            </div>
-          </div>
-
-          {/* Table — сразу под KPI, как просили */}
-          <div style={card}>
-            <div style={{ ...lbl, marginBottom: '12px' }}>Метрики — детализация по участкам</div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ color: '#6b7280', textAlign: 'left', borderBottom: '1px solid #1d2d24' }}>
-                    <th style={{ padding: '8px' }}>Участок</th>
-                    <th style={{ padding: '8px' }}>Подрядчик</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Кабель План</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Кабель Факт</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Труба План</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Труба Факт</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Засыпка План</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Засыпка Факт</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>ГНБ План</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>ГНБ Факт</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {metricsFiltered.map((r, i) => {
-                    const cablePlan = toNum(r["Кабель План"]);
-                    const cableFact = toNum(r["Кабель Факт"]);
-                    const pipePlan = toNum(r["Труба План"]);
-                    const pipeFact = toNum(r["Труба Факт"]);
-                    const backfillPlan = toNum(r["Засыпка План"]);
-                    const backfillFact = toNum(r["Засыпка Факт"]);
-                    const hddPlan = toNum(r["ГНБ План"]);
-                    const hddFact = toNum(r["ГНБ Факт"]);
-                    return (
-                      <tr key={i} style={{ borderBottom: '1px solid #16251e' }}>
-                        <td style={{ padding: '8px', color: '#e5e7eb' }}>{r["Участок"]}</td>
-                        <td style={{ padding: '8px', color: '#9ca3af' }}>{r["Подрядчик"]}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#2898ff' }}>{cablePlan}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#2de2a6' }}>{cableFact}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#2898ff' }}>{pipePlan}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#2de2a6' }}>{pipeFact}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#2898ff' }}>{backfillPlan}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#2de2a6' }}>{backfillFact}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#2898ff' }}>{hddPlan}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', color: '#2de2a6' }}>{hddFact}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
             </div>
           </div>
         </>
