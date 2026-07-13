@@ -241,6 +241,95 @@ const TmcBarSvg = ({ data }) => {
   );
 };
 
+// Горизонтальный SVG-график для одного материала
+const TmcBarSvgHorizontal = ({ data }) => {
+  if (!data || data.length === 0) return null;
+  const item = data[0];
+  const maxVal = Math.max(item.plan, item.fact, 1);
+
+  const TOTAL_W = 900;
+  const TOTAL_H = 190;
+  const PAD_LEFT = 16;
+  const PAD_RIGHT = 110;
+  const LABEL_COL_W = 72;   // только для «План» / «Факт»
+  const BAR_AREA_W = TOTAL_W - PAD_LEFT - LABEL_COL_W - PAD_RIGHT;
+  const BAR_H = 40;
+  const GAP = 18;
+  const PAD_TOP = 14;
+  const NAME_H = 30;
+
+  const barX = PAD_LEFT + LABEL_COL_W;
+  const planY = PAD_TOP + NAME_H;
+  const factY = planY + BAR_H + GAP;
+
+  const scaleW = (val) => !val ? 0 : Math.max((val / maxVal) * BAR_AREA_W, 2);
+  const fmt = (n) => {
+    if (!n) return '0';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'М';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'к';
+    return Math.round(n).toString();
+  };
+
+  const planW = scaleW(item.plan);
+  const factW = scaleW(item.fact);
+  const r = 8;
+
+  const roundedRightRect = (x, y, w, h, radius) => {
+    if (w <= 0) return '';
+    const rr = Math.min(radius, h / 2, w / 2);
+    return `M ${x},${y} L ${x + w - rr},${y} Q ${x + w},${y} ${x + w},${y + rr} L ${x + w},${y + h - rr} Q ${x + w},${y + h} ${x + w - rr},${y + h} L ${x},${y + h} Z`;
+  };
+
+  return (
+    <div style={{ paddingBottom: 4 }}>
+      <svg width="100%" viewBox={`0 0 ${TOTAL_W} ${TOTAL_H}`} style={{ display: 'block' }}>
+        <defs>
+          <linearGradient id="hGradPlan" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#1a6abf" />
+            <stop offset="100%" stopColor="#5ab4ff" />
+          </linearGradient>
+          <linearGradient id="hGradFact" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#0a7050" />
+            <stop offset="100%" stopColor="#2de2a6" />
+          </linearGradient>
+        </defs>
+
+        {/* Название материала — по центру сверху */}
+        <text x={TOTAL_W / 2} y={PAD_TOP + 16} textAnchor="middle"
+          fill="#e5e7eb" fontSize={15} fontWeight={700}>
+          {item.name}
+        </text>
+
+        {/* Метка «План» слева */}
+        <text x={barX - 10} y={planY + BAR_H / 2 + 5}
+          textAnchor="end" fill="#5ab4ff" fontSize={13} fontWeight={700}>
+          План
+        </text>
+        {/* Бар план */}
+        {planW > 0 && <path d={roundedRightRect(barX, planY, planW, BAR_H, r)} fill="url(#hGradPlan)" />}
+        {/* Значение справа от бара */}
+        <text x={barX + planW + 12} y={planY + BAR_H / 2 + 5}
+          textAnchor="start" fill="#5ab4ff" fontSize={15} fontWeight={800}>
+          {fmt(item.plan)}
+        </text>
+
+        {/* Метка «Факт» слева */}
+        <text x={barX - 10} y={factY + BAR_H / 2 + 5}
+          textAnchor="end" fill="#2de2a6" fontSize={13} fontWeight={700}>
+          Факт
+        </text>
+        {/* Бар факт */}
+        {factW > 0 && <path d={roundedRightRect(barX, factY, factW, BAR_H, r)} fill="url(#hGradFact)" />}
+        {/* Значение справа от бара */}
+        <text x={barX + factW + 12} y={factY + BAR_H / 2 + 5}
+          textAnchor="start" fill="#2de2a6" fontSize={15} fontWeight={800}>
+          {fmt(item.fact)}
+        </text>
+      </svg>
+    </div>
+  );
+};
+
 export default function App() {
   const [allData, setAllData] = useState([]);
   const [metricsData, setMetricsData] = useState([]);
@@ -558,13 +647,28 @@ export default function App() {
 
   // ТМЦ: список участков
   const tmcSections = useMemo(() => {
-    return [...new Set(currentTmcData.map(r => getTmcUch(r)).filter(v => v && v !== 'Общее количество' && !v.startsWith('Unnamed')))].sort();
+    const allMats = detectMaterials(currentTmcData);
+    return [...new Set(currentTmcData.map(r => getTmcUch(r)).filter(v => {
+      if (!v || v === 'Общее количество' || v.startsWith('Unnamed')) return false;
+      const rows = currentTmcData.filter(r => getTmcUch(r) === v);
+      return allMats.some(({ planKey, factKey }) =>
+        rows.some(r => toNum(r[planKey]) > 0 || toNum(r[factKey]) > 0)
+      );
+    }))].sort();
   }, [currentTmcData]);
 
   // ТМЦ: детектированные материалы
   const tmcMaterials = useMemo(() => {
-    return detectMaterials(currentTmcData);
-  }, [currentTmcData]);
+    const allMats = detectMaterials(currentTmcData);
+    const rows = currentTmcData.filter(r => {
+      const uch = getTmcUch(r);
+      return uch && uch !== 'Общее количество' && !uch.startsWith('Unnamed');
+    });
+    const filteredRows = selectedTmcSection === 'Все' ? rows : rows.filter(r => getTmcUch(r) === selectedTmcSection);
+    return allMats.filter(({ planKey, factKey }) =>
+      filteredRows.some(r => toNum(r[planKey]) > 0 || toNum(r[factKey]) > 0)
+    );
+  }, [currentTmcData, selectedTmcSection]);
 
   // ТМЦ: данные для графика с агрегацией по участку
   const tmcChartData = useMemo(() => {
@@ -1309,8 +1413,8 @@ export default function App() {
           {/* Sub-mode buttons */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
             {[
-              { id: 'sklad', label: '📦 Склад' },
-              { id: 'zakup', label: '🛒 Закуп' },
+              { id: 'sklad', label: 'Склад' },
+              { id: 'zakup', label: 'Закуп' },
             ].map(btn => (
               <button
                 key={btn.id}
@@ -1352,7 +1456,7 @@ export default function App() {
           ) : (
             <div style={card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <div style={lbl}>{tmcMode === 'sklad' ? '📦 Материалы — Склад' : '🛒 Материалы — Закуп'}</div>
+                <div style={lbl}>{tmcMode === 'sklad' ? 'Материалы — Склад' : 'Материалы — Закуп'}</div>
                   <div style={{ display: 'flex', gap: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
                       <div style={{ width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(180deg, #5ab4ff, #0a4590)' }} />
@@ -1364,7 +1468,10 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <TmcBarSvg data={tmcChartData} />
+              {selectedTmcMaterial !== 'Все' && tmcChartData.length === 1
+                ? <TmcBarSvgHorizontal data={tmcChartData} />
+                : <TmcBarSvg data={tmcChartData} />
+              }
             </div>
           )}
         </>
