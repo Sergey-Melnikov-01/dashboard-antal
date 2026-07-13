@@ -651,11 +651,22 @@ export default function App() {
     return [...new Set(currentTmcData.map(r => getTmcUch(r)).filter(v => {
       if (!v || v === 'Общее количество' || v.startsWith('Unnamed')) return false;
       const rows = currentTmcData.filter(r => getTmcUch(r) === v);
-      return allMats.some(({ planKey, factKey }) =>
-        rows.some(r => toNum(r[planKey]) > 0 || toNum(r[factKey]) > 0)
-      );
+      if (selectedTmcMaterial === 'Все') {
+        return allMats.some(({ planKey, factKey }) =>
+          rows.some(r => toNum(r[planKey]) > 0 || toNum(r[factKey]) > 0)
+        );
+      }
+      const mat = allMats.find(({ name }) => name === selectedTmcMaterial);
+      if (!mat) return false;
+      return rows.some(r => toNum(r[mat.planKey]) > 0 || toNum(r[mat.factKey]) > 0);
     }))].sort();
-  }, [currentTmcData]);
+  }, [currentTmcData, selectedTmcMaterial]);
+
+  useEffect(() => {
+    if (selectedTmcSection !== 'Все' && !tmcSections.includes(selectedTmcSection)) {
+      setSelectedTmcSection('Все');
+    }
+  }, [tmcSections, selectedTmcSection]);
 
   // ТМЦ: детектированные материалы
   const tmcMaterials = useMemo(() => {
