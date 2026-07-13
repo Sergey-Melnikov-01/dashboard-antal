@@ -187,8 +187,8 @@ const TmcBarSvg = ({ data }) => {
         {data.map((item, i) => {
           const gx = PAD_LEFT + i * groupW;
           const cx = gx + groupCenter;
-          const planX = cx - BAR_W - BAR_GAP / 2;
-          const factX = cx + BAR_GAP / 2;
+          const factX = cx - BAR_W - BAR_GAP / 2;
+          const planX = cx + BAR_GAP / 2;
           const factH = scaleH(item.fact);
           const planH = scaleH(item.plan);
           const [line1, line2] = splitLabel(item.name);
@@ -236,6 +236,7 @@ export default function App() {
   const [tmcMode, setTmcMode] = useState('sklad'); // 'sklad' | 'zakup'
   const [tmcData, setTmcData] = useState([]);
   const [tmcDvaData, setTmcDvaData] = useState([]);
+  const [datesData, setDatesData] = useState([]); // DB_DATES — отклонение сроков
   const [selectedTmcSection, setSelectedTmcSection] = useState('Все');
   const [selectedTmcMaterial, setSelectedTmcMaterial] = useState('Все');
   const [loading, setLoading] = useState(true);
@@ -299,6 +300,9 @@ export default function App() {
       const tmcDvaKey = Object.keys(raw).find(k => k.toUpperCase().includes('TMCDVA') || k.toUpperCase().includes('TMC2') || k.toUpperCase() === 'DB_TMCDVA');
       console.log('Ключ TMCdva:', tmcDvaKey, '| Данные:', tmcDvaKey ? raw[tmcDvaKey]?.length : 0);
       setTmcDvaData(tmcDvaKey && Array.isArray(raw[tmcDvaKey]) ? raw[tmcDvaKey] : []);
+
+      // DB_DATES — отклонение сроков
+      setDatesData(Array.isArray(raw?.DB_DATES) ? raw.DB_DATES : []);
 
       setLoading(false);
     }).catch(err => {
@@ -368,6 +372,51 @@ export default function App() {
       nzsPlan: np, nzsFact: nf
     };
   }, [filtered]);
+
+  // Карточка «Отставание» — берётся из DB_DATES
+  // Показывается только если: нет фильтра по участку и подрядчику
+  // Реагирует на: selectedBranch (ветка) и selectedDate (дата)
+  const delayKpi = useMemo(() => {
+    // Скрываем если выбран конкретный участок или подрядчик
+    if (selectedSection !== 'Все' || selectedContractor !== 'Все') return null;
+    if (!datesData.length) return null;
+
+    // Парсит и ISO-строки ('2026-07-08T...') и dd.mm.yyyy
+    const parseAnyDate = s => {
+      if (!s) return new Date(0);
+      const str = String(s);
+      if (str.includes('T')) return new Date(str); // ISO
+      const [d, m, y] = str.split('.');            // dd.mm.yyyy
+      return new Date(y, m - 1, d);
+    };
+
+    // Фильтруем по ветке (trim — убирает пробел в конце)
+    let rows = datesData;
+    if (selectedBranch !== 'Все') {
+      rows = rows.filter(r => String(r["Ветка"] || '').trim() === selectedBranch.trim());
+    }
+
+    // Фильтруем по дате: оставляем только строки, где "Дата отчета" <= activeDate
+    if (activeDate) {
+      const ad = parseDate(activeDate);
+      rows = rows.filter(r => parseAnyDate(r["Дата отчета"]) <= ad);
+    }
+
+    if (!rows.length) return null;
+
+    // Берём последнюю по дате строку (наиболее свежую)
+    const latest = rows.reduce((a, b) => {
+      return parseAnyDate(a["Дата отчета"]) >= parseAnyDate(b["Дата отчета"]) ? a : b;
+    });
+
+    const days = toNum(latest["Отклонение (дней)"]);
+    const status = String(latest["Статус (🟢/🟡/🔴)"] || latest["Статус"] || '');
+
+    // Цвет: 0 — зелёный, 1–14 — жёлтый, 15+ — красный
+    const color = days === 0 ? '#2de2a6' : days <= 14 ? '#ff9b45' : '#ff4d4d';
+
+    return { days, color, status };
+  }, [datesData, selectedBranch, selectedSection, selectedContractor, activeDate]);
 
   const trendData = useMemo(() => {
     return dates.map(date => {
@@ -804,7 +853,7 @@ export default function App() {
           </div>
 
           {/* KPI Row 1 — Объёмы */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${delayKpi ? 5 : 4}, 1fr)`, gap: '16px', marginBottom: '16px' }}>
           {[
             { label: 'План общий', val: totalPlan.toFixed(1), unit: 'км', color: '#2898ff' },
             { label: 'Факт общий', val: totalFact.toFixed(1), unit: 'км', color: '#2de2a6' },
@@ -823,6 +872,20 @@ export default function App() {
               </div>
             </div>
           ))}
+
+          {/* 5-я карточка — Отставание (только если есть данные и нет фильтра по участку/подрядчику) */}
+          {delayKpi && (
+            <div style={card}>
+              <div style={lbl}>Отставание</div>
+              <div style={{ fontSize: '28px', fontWeight: '800', color: delayKpi.color, whiteSpace: 'nowrap' }}>
+                {delayKpi.days}
+                <span style={{ fontSize: '16px', opacity: 0.7, marginLeft: '4px' }}>дн.</span>
+              </div>
+              {delayKpi.status && (
+                <div style={{ fontSize: '18px', marginTop: '4px' }}>{delayKpi.status}</div>
+              )}
+            </div>
+          )}
         </div>
 
           {/* Charts row */}
@@ -1328,12 +1391,12 @@ export default function App() {
                 <div style={lbl}>{tmcMode === 'sklad' ? '📦 Материалы — Склад' : '🛒 Материалы — Закуп'}</div>
                 <div style={{ display: 'flex', gap: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
-                    <div style={{ width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(180deg, #5ab4ff, #0a4590)' }} />
-                    План
-                  </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
                     <div style={{ width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(180deg, #2de2a6, #0a7050)' }} />
                     Факт
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
+                    <div style={{ width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(180deg, #5ab4ff, #0a4590)' }} />
+                    План
                   </div>
                 </div>
               </div>
