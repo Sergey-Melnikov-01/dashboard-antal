@@ -246,9 +246,9 @@ const TmcBarSvgHorizontal = ({ data }) => {
   if (!data || data.length === 0) return null;
   const maxVal = Math.max(...data.flatMap(d => [d.plan, d.fact]), 1);
 
-  const TOTAL_W = 480;
+  const TOTAL_W = 900;
   const PAD_LEFT = 16;
-  const PAD_RIGHT = 75;
+  const PAD_RIGHT = 110;
   const LABEL_COL_W = 72;
   const BAR_AREA_W = TOTAL_W - PAD_LEFT - LABEL_COL_W - PAD_RIGHT;
   const BAR_H = 36;
@@ -838,19 +838,28 @@ export default function App() {
           .push-btn span:nth-child(4) { bottom: -100%; left: 0; width: 1px; height: 100%; background: linear-gradient(360deg, transparent, #2de2a6); }
           .push-btn.open span:nth-child(4) { bottom: 100%; transition: 0.8s; transition-delay: 0.6s; }
           .push-dropdown-menu {
-            position: absolute;
-            top: calc(100% + 6px);
-            left: 0;
-            z-index: 999;
-            background: #21222d;
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 10px;
-            min-width: 180px;
-            max-height: 260px;
-            overflow-y: auto;
-            box-shadow: 0 0 20px rgba(45,226,166,0.15);
-            padding: 4px 0;
-          }
+              position: absolute;
+              top: calc(100% + 6px);
+              left: 0;
+              z-index: 999;
+              background: #21222d;
+              border: 1px solid rgba(255,255,255,0.1);
+              border-radius: 10px;
+              min-width: 180px;
+              max-width: calc(100vw - 24px);
+              max-height: 260px;
+              overflow-y: auto;
+              overflow-x: hidden;
+              box-shadow: 0 0 20px rgba(45,226,166,0.15);
+              padding: 4px 0;
+            }
+            @media (max-width: 640px) {
+              .push-dropdown-menu {
+                left: auto;
+                right: 0;
+                min-width: 160px;
+              }
+            }
           .push-dropdown-item {
             padding: 9px 16px;
             font-size: 12px;
