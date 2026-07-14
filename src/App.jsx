@@ -246,9 +246,9 @@ const TmcBarSvgHorizontal = ({ data }) => {
   if (!data || data.length === 0) return null;
   const maxVal = Math.max(...data.flatMap(d => [d.plan, d.fact]), 1);
 
-  const TOTAL_W = 900;
+  const TOTAL_W = 480;
   const PAD_LEFT = 16;
-  const PAD_RIGHT = 110;
+  const PAD_RIGHT = 75;
   const LABEL_COL_W = 72;
   const BAR_AREA_W = TOTAL_W - PAD_LEFT - LABEL_COL_W - PAD_RIGHT;
   const BAR_H = 36;
