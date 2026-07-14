@@ -788,7 +788,7 @@ export default function App() {
 
   const toggleDropdown = (name) => setOpenDropdown(prev => prev === name ? null : name);
 
-  const PushDropdown = ({ name, label, value, options, onChange, onReset }) => {
+  const PushDropdown = ({ name, label, value, options, onChange, onReset, alignRight }) => {
     const isOpen = openDropdown === name;
     return (
       <div style={{ position: 'relative' }}>
@@ -840,7 +840,6 @@ export default function App() {
           .push-dropdown-menu {
               position: absolute;
               top: calc(100% + 6px);
-              left: 0;
               z-index: 999;
               background: #21222d;
               border: 1px solid rgba(255,255,255,0.1);
@@ -852,13 +851,6 @@ export default function App() {
               overflow-x: hidden;
               box-shadow: 0 0 20px rgba(45,226,166,0.15);
               padding: 4px 0;
-            }
-            @media (max-width: 640px) {
-              .push-dropdown-menu {
-                left: auto;
-                right: 0;
-                min-width: 160px;
-              }
             }
           .push-dropdown-item {
             padding: 9px 16px;
@@ -880,7 +872,7 @@ export default function App() {
           <span style={{ position: 'static', marginLeft: '4px', fontSize: '9px' }}>{isOpen ? '▲' : '▼'}</span>
         </button>
         {isOpen && (
-            <div className="push-dropdown-menu">
+            <div className="push-dropdown-menu" style={alignRight ? { right: 0 } : { left: 0 }}>
             <div
               className={`push-dropdown-item ${!value || value === 'Все' || value === '' ? 'selected' : ''}`}
               onClick={() => { onChange(onReset !== undefined ? onReset : 'Все'); setOpenDropdown(null); }}
@@ -1462,12 +1454,13 @@ export default function App() {
               onChange={v => setSelectedTmcSection(v)}
             />
             <PushDropdown
-              name="tmc_material"
-              label="Материал"
-              value={selectedTmcMaterial}
-              options={tmcMaterials.map(m => m.name)}
-              onChange={v => setSelectedTmcMaterial(v)}
-            />
+                name="tmc_material"
+                label="Материал"
+                value={selectedTmcMaterial}
+                options={tmcMaterials.map(m => m.name)}
+                onChange={v => setSelectedTmcMaterial(v)}
+                alignRight
+              />
           </div>
 
           {/* Chart area */}
