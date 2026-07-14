@@ -788,10 +788,21 @@ export default function App() {
 
   const toggleDropdown = (name) => setOpenDropdown(prev => prev === name ? null : name);
 
-  const PushDropdown = ({ name, label, value, options, onChange, onReset, alignRight }) => {
+  const PushDropdown = ({ name, label, value, options, onChange, onReset }) => {
     const isOpen = openDropdown === name;
+    const wrapperRef = React.useRef(null);
+    const [openLeft, setOpenLeft] = React.useState(false);
+
+    const handleToggle = () => {
+      if (!isOpen && wrapperRef.current) {
+        const rect = wrapperRef.current.getBoundingClientRect();
+        setOpenLeft(rect.left + 280 > window.innerWidth);
+      }
+      toggleDropdown(name);
+    };
+
     return (
-      <div style={{ position: 'relative' }}>
+      <div ref={wrapperRef} style={{ position: 'relative' }}>
         <style>{`
           .push-btn {
             border-radius: 10px;
@@ -838,41 +849,43 @@ export default function App() {
           .push-btn span:nth-child(4) { bottom: -100%; left: 0; width: 1px; height: 100%; background: linear-gradient(360deg, transparent, #2de2a6); }
           .push-btn.open span:nth-child(4) { bottom: 100%; transition: 0.8s; transition-delay: 0.6s; }
           .push-dropdown-menu {
-              position: absolute;
-              top: calc(100% + 6px);
-              z-index: 999;
-              background: #21222d;
-              border: 1px solid rgba(255,255,255,0.1);
-              border-radius: 10px;
-              min-width: 180px;
-              max-width: calc(100vw - 24px);
-              max-height: 260px;
-              overflow-y: auto;
-              overflow-x: hidden;
-              box-shadow: 0 0 20px rgba(45,226,166,0.15);
-              padding: 4px 0;
-            }
+            position: absolute;
+            top: calc(100% + 6px);
+            z-index: 9999;
+            background: #21222d;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            min-width: 200px;
+            max-width: calc(100vw - 24px);
+            max-height: 260px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            box-shadow: 0 0 20px rgba(45,226,166,0.15);
+            padding: 4px 0;
+          }
           .push-dropdown-item {
             padding: 9px 16px;
             font-size: 12px;
             color: #9ca3af;
             cursor: pointer;
             transition: background 0.15s, color 0.15s;
-            letter-spacing: 0.5px;
           }
           .push-dropdown-item:hover { background: rgba(255,255,255,0.05); color: #2de2a6; }
           .push-dropdown-item.selected { color: #2de2a6; font-weight: bold; }
         `}</style>
         <button
           className={`push-btn ${isOpen ? 'open' : ''} ${(value && value !== 'Все') ? 'active-filter' : ''}`}
-          onClick={() => toggleDropdown(name)}
+          onClick={handleToggle}
         >
           <span></span><span></span><span></span><span></span>
           {label}: {value || 'Все'}
           <span style={{ position: 'static', marginLeft: '4px', fontSize: '9px' }}>{isOpen ? '▲' : '▼'}</span>
         </button>
         {isOpen && (
-            <div className="push-dropdown-menu" style={alignRight ? { right: 0 } : { left: 0 }}>
+          <div
+            className="push-dropdown-menu"
+            style={openLeft ? { right: 0 } : { left: 0 }}
+          >
             <div
               className={`push-dropdown-item ${!value || value === 'Все' || value === '' ? 'selected' : ''}`}
               onClick={() => { onChange(onReset !== undefined ? onReset : 'Все'); setOpenDropdown(null); }}
@@ -894,7 +907,7 @@ export default function App() {
                 {opt}
               </div>
             ))}
-          </div>                        
+          </div>
         )}
       </div>
     );
