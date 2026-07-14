@@ -909,7 +909,7 @@ export default function App() {
   const dateOptionsForDropdown = activeTab === 'schedule' ? metricsDates : dates;
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, color: '#e2e8f0', padding: '30px 36px', fontFamily: 'Inter, sans-serif' }}>
+    <div className="app-wrapper" style={{ minHeight: '100vh', background: bg, color: '#e2e8f0', fontFamily: 'Inter, sans-serif' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
         <h1 style={{ fontSize: '22px', fontWeight: '800', margin: 0 }}>

@@ -130,3 +130,41 @@ body {
 body {
   translate: no;
 }
+/* ===== АДАПТИВНОСТЬ ===== */
+
+/* Базовый padding обёртки */
+.app-wrapper {
+  padding: 30px 36px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+/* Планшет (до 1024px) */
+@media (max-width: 1024px) {
+  .app-wrapper {
+    padding: 20px 20px;
+  }
+  .tabs-container {
+    gap: 8px;
+  }
+  .bubbly-button {
+    font-size: 12px;
+    padding: 10px 16px;
+  }
+}
+
+/* Мобильный (до 640px) */
+@media (max-width: 640px) {
+  .app-wrapper {
+    padding: 12px 12px;
+  }
+  .tabs-container {
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .bubbly-button {
+    font-size: 11px;
+    padding: 8px 12px;
+    border-radius: 6px;
+  }
+}
