@@ -168,3 +168,30 @@ body {
     border-radius: 6px;
   }
 }
+/* ===== АДАПТИВ ГРИДОВ ===== */
+
+/* Планшет */
+@media (max-width: 1024px) {
+  .kpi-grid-smr {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  .gauge-row-smr {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* Мобильный */
+@media (max-width: 768px) {
+  .kpi-grid-smr {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .kpi-grid-3 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .charts-row-smr {
+    grid-template-columns: 1fr !important;
+  }
+  .gauge-row-smr {
+    grid-template-columns: 1fr !important;
+  }
+}

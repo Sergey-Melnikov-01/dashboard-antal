@@ -987,7 +987,7 @@ export default function App() {
           </div>
 
           {/* KPI Row 1 — Объёмы */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${delayKpi ? 5 : 4}, 1fr)`, gap: '16px', marginBottom: '16px' }}>
+          <div className="kpi-grid-smr" style={{ display: 'grid', gridTemplateColumns: `repeat(${delayKpi ? 5 : 4}, 1fr)`, gap: '16px', marginBottom: '16px' }}>
           {[
             { label: 'План общий', val: totalPlan.toFixed(1), unit: 'км', color: '#2898ff' },
             { label: 'Факт общий', val: totalFact.toFixed(1), unit: 'км', color: '#2de2a6' },
@@ -1023,7 +1023,7 @@ export default function App() {
         </div>
 
           {/* Charts row */}
-          <div style={{ 
+          <div className="charts-row-smr" style={{ 
             display: 'grid', 
             gridTemplateColumns: (nzsPlan > 0 || nzsFact > 0) ? '1fr 2fr' : '1fr 1fr', 
             gap: '16px', 
@@ -1069,7 +1069,7 @@ export default function App() {
           </div>
 
           {/* Правая часть: карточки со спидометрами (теперь их может быть 2 или 3) */}
-          <div style={{ 
+          <div className="gauge-row-smr" style={{ 
             display: 'grid', 
             gridTemplateColumns: (nzsPlan > 0 || nzsFact > 0) ? '1fr 1fr 1fr' : '1fr 1fr', 
             gap: '16px' 
@@ -1329,7 +1329,7 @@ export default function App() {
               then Backfill group, then HDD group. Each group shows Plan / Fact / %.
               Pipe values shown under Cable values as requested. */}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
+          <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
             {/* Column 1: Plan (Cable top, Pipe below) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ ...card }}>
@@ -1380,7 +1380,7 @@ export default function App() {
             </div>
 
           {/* Next: Backfill group (Засыпка) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
+          <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
             <div style={card}>
               <div style={lbl}>Засыпка (план)</div>
               <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2898ff' }}>
@@ -1402,7 +1402,7 @@ export default function App() {
           </div>
 
           {/* Next: HDD group (ГНБ) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
+          <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
             <div style={card}>
               <div style={lbl}>ГНБ (план)</div>
               <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2898ff' }}>
