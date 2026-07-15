@@ -489,9 +489,9 @@ const PirBranchCard = ({ branchKey, branchLabel, routes, color }) => {
       {expanded && (
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 14, marginBottom: 6 }}>
           <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 12 }}>
-            Этапы ({agg.stages.length})
+            Этапы ({agg.stages.filter(s => s.doneKm > 0).length})
           </div>
-          {agg.stages.map(s => (
+          {agg.stages.filter(s => s.doneKm > 0).map(s => (
             <StageProgressBar key={s.idx} stageName={s.name} doneKm={s.doneKm} totalKm={agg.totalKm} color={color} />
           ))}
         </div>
