@@ -406,8 +406,8 @@ const CircularProgress = ({ percent, color, size = 130 }) => {
 };
 
 // Полоса прогресса одного этапа
-const StageProgressBar = ({ stageName, completedCount, totalRoutes, color }) => {
-  const pct = totalRoutes > 0 ? (completedCount / totalRoutes) * 100 : 0;
+const StageProgressBar = ({ stageName, doneKm, totalKm, color }) => {
+  const pct = totalKm > 0 ? (doneKm / totalKm) * 100 : 0;
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 5 }}>
@@ -416,7 +416,7 @@ const StageProgressBar = ({ stageName, completedCount, totalRoutes, color }) => 
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }} title={stageName}>{stageName}</div>
         <div style={{ fontSize: 11, fontWeight: 700, color, whiteSpace: 'nowrap' }}>
-          {Math.round(pct)}% <span style={{ color: '#64748b', fontWeight: 500 }}>({completedCount}/{totalRoutes})</span>
+          {Math.round(pct)}% <span style={{ color: '#64748b', fontWeight: 500 }}>({doneKm.toFixed(0)}/{totalKm.toFixed(0)} км)</span>
         </div>
       </div>
       <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 4, overflow: 'hidden' }}>
@@ -435,21 +435,23 @@ const PirBranchCard = ({ branchKey, branchLabel, routes, color }) => {
 
   const agg = useMemo(() => {
     const totalKm = routes.reduce((s, r) => s + (r.km || 0), 0);
-    const totalSteps = routes.length * 21;
-    let completedSteps = 0;
-    routes.forEach(r => r.stages.forEach(st => { if (st.done) completedSteps++; }));
-    const overallPercent = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
-    const completedKm = totalKm * (overallPercent / 100);
+    // Прогресс, взвешенный по километражу: вклад маршрута = его км × (выполнено этапов / 21)
+    let completedKm = 0;
+    routes.forEach(r => {
+      const doneStages = r.stages.reduce((c, st) => c + (st.done ? 1 : 0), 0);
+      completedKm += (r.km || 0) * (doneStages / 21);
+    });
+    const overallPercent = totalKm > 0 ? (completedKm / totalKm) * 100 : 0;
 
-    // Активные этапы: где хоть у одного маршрута есть план или факт
+    // Активные этапы: где хоть у одного маршрута есть план или факт; прогресс по км
     const stages = [];
     for (let i = 0; i < 21; i++) {
       const active = routes.some(r => r.stages[i] && (r.stages[i].planDate || r.stages[i].factDate));
       if (!active) continue;
-      const done = routes.reduce((s, r) => s + (r.stages[i] && r.stages[i].done ? 1 : 0), 0);
-      stages.push({ idx: i, name: (routes[0] && routes[0].stages[i] ? routes[0].stages[i].name : `Этап ${i + 1}`), done });
+      const doneKm = routes.reduce((s, r) => s + (r.stages[i] && r.stages[i].done ? (r.km || 0) : 0), 0);
+      stages.push({ idx: i, name: (routes[0] && routes[0].stages[i] ? routes[0].stages[i].name : `Этап ${i + 1}`), doneKm });
     }
-    return { totalKm, totalSteps, completedSteps, overallPercent, completedKm, stages };
+    return { totalKm, overallPercent, completedKm, stages };
   }, [routes]);
 
   return (
@@ -462,7 +464,6 @@ const PirBranchCard = ({ branchKey, branchLabel, routes, color }) => {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
         <span style={{ width: 14, height: 14, borderRadius: '50%', background: color, boxShadow: `0 0 10px ${color}88`, flexShrink: 0 }} />
         <div style={{ fontSize: 15, fontWeight: 800, color: '#ffffff' }}>{branchLabel}</div>
-        <div style={{ marginLeft: 'auto', fontSize: 12, color: '#94a3b8' }}>{routes.length} маршр.</div>
       </div>
 
       {/* Круговой прогресс */}
@@ -475,7 +476,7 @@ const PirBranchCard = ({ branchKey, branchLabel, routes, color }) => {
         <div style={{ fontSize: 13, fontWeight: 700, color: '#ffffff' }}>
           {agg.completedKm.toFixed(1)} км
         </div>
-        <div style={{ fontSize: 12, color: '#94a3b8' }}>/ {agg.totalKm.toFixed(1)} км всего</div>
+        <div style={{ fontSize: 12, color: '#94a3b8' }}>/ {agg.totalKm.toFixed(1)} км</div>
       </div>
       <div style={{ height: 7, background: 'rgba(255,255,255,0.05)', borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
         <div style={{
@@ -491,7 +492,7 @@ const PirBranchCard = ({ branchKey, branchLabel, routes, color }) => {
             Этапы ({agg.stages.length})
           </div>
           {agg.stages.map(s => (
-            <StageProgressBar key={s.idx} stageName={s.name} completedCount={s.done} totalRoutes={routes.length} color={color} />
+            <StageProgressBar key={s.idx} stageName={s.name} doneKm={s.doneKm} totalKm={agg.totalKm} color={color} />
           ))}
         </div>
       )}
@@ -521,10 +522,13 @@ const PirTab = () => {
 
   const totals = useMemo(() => {
     const totalKm = PIR_ROUTES_DATA.reduce((s, r) => s + (r.km || 0), 0);
-    const totalSteps = PIR_ROUTES_DATA.length * 21;
-    let done = 0;
-    PIR_ROUTES_DATA.forEach(r => r.stages.forEach(st => { if (st.done) done++; }));
-    const pct = totalSteps > 0 ? (done / totalSteps) * 100 : 0;
+    // Общий прогресс, взвешенный по километражу
+    let completedKm = 0;
+    PIR_ROUTES_DATA.forEach(r => {
+      const doneStages = r.stages.reduce((c, st) => c + (st.done ? 1 : 0), 0);
+      completedKm += (r.km || 0) * (doneStages / 21);
+    });
+    const pct = totalKm > 0 ? (completedKm / totalKm) * 100 : 0;
     return { routes: PIR_ROUTES_DATA.length, totalKm, pct };
   }, []);
 
