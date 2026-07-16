@@ -371,6 +371,38 @@ const PIR_ROUTES_DATA = PIR_RAW.map(r => ({
   })),
 }));
 
+function parseVolsSheet(rows) {
+  function toDate(v) {
+    if (!v) return null;
+    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    const s = String(v).trim();
+    return s.length >= 10 ? s.slice(0, 10) : null;
+  }
+  function toBranch(v) {
+    const s = String(v || '').toLowerCase();
+    if (s.includes('красн')) return 'red';
+    if (s.includes('зелен')) return 'green';
+    if (s.includes('синя') || s.includes('голуб')) return 'blue';
+    return 'red';
+  }
+  return rows.slice(3)
+    .filter(r => r[4] && r[5])
+    .map((r, idx) => ({
+      id: idx + 1,
+      name: String(r[3] || r[2] || ''),
+      region: String(r[0] || ''),
+      district: String(r[1] || ''),
+      branch: toBranch(r[4]),
+      km: parseFloat(r[5]) || 0,
+      stages: Array.from({ length: 21 }, (_, i) => ({
+        name: PIR_STAGE_NAMES[i] || ('Этап ' + (i + 1)),
+        planDate: toDate(r[9 + i * 2]) || null,
+        factDate: toDate(r[9 + i * 2 + 1]) || null,
+        done: pirIsDone(toDate(r[9 + i * 2 + 1])),
+      })),
+    }));
+}
+
 const PIR_BRANCH_META = {
   green: { label: 'Зелёная ветка', color: '#4ade80' },
   red: { label: 'Красная ветка', color: '#f87171' },
@@ -513,24 +545,55 @@ const PirBranchCard = ({ branchKey, branchLabel, routes, color }) => {
 };
 
 // PIR вкладка — три карточки веток
-const PirTab = () => {
+const PirTab = ({ pirVolsData }) => {
+  const routesData = useMemo(() => {
+    if (!Array.isArray(pirVolsData) || pirVolsData.length < 4) return PIR_ROUTES_DATA;
+    const today = new Date();
+    const row2 = pirVolsData[1] || [];
+    const stageNames = [];
+    for (let i = 9; i < row2.length; i += 2) {
+      const s = row2[i];
+      if (s && String(s).trim()) stageNames.push(String(s).trim());
+    }
+    const routes = [];
+    for (let ri = 3; ri < pirVolsData.length; ri++) {
+      const row = pirVolsData[ri];
+      if (!row || !row[0]) continue;
+      const name = String(row[3] || '').trim();
+      if (!name) continue;
+      const branchRaw = String(row[4] || '').toLowerCase();
+      let branch = 'red';
+      if (branchRaw.includes('зелен')) branch = 'green';
+      else if (branchRaw.includes('син') || branchRaw.includes('голуб')) branch = 'blue';
+      const km = parseFloat(row[5]) || 0;
+      const stages = [];
+      for (let i = 0; i < 21 && (9 + i * 2 + 1) < row.length; i++) {
+        const planDate = String(row[9 + i * 2] || '').trim() || null;
+        const factDate = String(row[9 + i * 2 + 1] || '').trim() || null;
+        const done = factDate ? new Date(factDate) <= today : false;
+        stages.push({ name: stageNames[i] || PIR_STAGE_NAMES[i] || `Этап ${i+1}`, planDate, factDate, done });
+      }
+      routes.push({ id: routes.length + 1, name, region: String(row[0]||''), district: String(row[1]||''), branch, km, stages });
+    }
+    return routes.length > 0 ? routes : PIR_ROUTES_DATA;
+  }, [pirVolsData]);
+
   const grouped = useMemo(() => {
     const g = { green: [], red: [], blue: [] };
-    PIR_ROUTES_DATA.forEach(r => { if (g[r.branch]) g[r.branch].push(r); });
+    routesData.forEach(r => { if (g[r.branch]) g[r.branch].push(r); });
     return g;
-  }, []);
+  }, [routesData]);
 
   const totals = useMemo(() => {
-    const totalKm = PIR_ROUTES_DATA.reduce((s, r) => s + (r.km || 0), 0);
-    // Общий прогресс, взвешенный по километражу
+    const totalKm = routesData.reduce((s, r) => s + (r.km || 0), 0);
     let completedKm = 0;
-    PIR_ROUTES_DATA.forEach(r => {
+    routesData.forEach(r => {
       const doneStages = r.stages.reduce((c, st) => c + (st.done ? 1 : 0), 0);
       completedKm += (r.km || 0) * (doneStages / 21);
     });
     const pct = totalKm > 0 ? (completedKm / totalKm) * 100 : 0;
-    return { routes: PIR_ROUTES_DATA.length, totalKm, pct };
-  }, []);
+    return { routes: routesData.length, totalKm, pct };
+  }, [routesData]);
 
   return (
     <>
@@ -577,7 +640,7 @@ const PirTab = () => {
 
       {/* Карточки веток */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
-        {['green', 'red', 'blue'].map(bk => (
+        {['green','blue', 'red'].map(bk => (
           <PirBranchCard
             key={bk}
             branchKey={bk}
@@ -597,6 +660,7 @@ export default function App() {
   const [allData, setAllData] = useState([]);
   const [metricsData, setMetricsData] = useState([]);
   const [pirData, setPirData] = useState([]); // <-- added state for DB_PIR
+  const [pirVolsData, setPirVolsData] = useState([]);
   const [pirMode, setPirMode] = useState('psd');
   const [tmcMode, setTmcMode] = useState('sklad'); // 'sklad' | 'zakup'
   const [tmcData, setTmcData] = useState([]);
@@ -659,6 +723,7 @@ export default function App() {
 
       // PIR data (if present in payload)
       setPirData(Array.isArray(raw?.DB_PIR) ? raw.DB_PIR : []);
+      setPirVolsData(Array.isArray(raw?.DB_PIR_VOLS) ? raw.DB_PIR_VOLS : []);
 
       // ТМЦ
       console.log('Все ключи API:', Object.keys(raw));
@@ -1547,7 +1612,7 @@ export default function App() {
           )}   
 
       {activeTab === 'pirvols' && (
-        <PirTab />
+        <PirTab pirVolsData={pirVolsData} />
       )}
 
       {activeTab === 'schedule' && (
