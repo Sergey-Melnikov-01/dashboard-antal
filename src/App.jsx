@@ -687,7 +687,8 @@ export default function App() {
     { id: 'schedule', label: '📈 Метрики' },
     { id: 'materials', label: '📦 ТМЦ' },
     { id: 'pir', label: '📋 ПИР/ПСД' },
-    { id: 'pirvols', label: '🛰️ ПИР ВОЛС' },
+    // Временно скрыта — раскомментировать, когда будет готова
+    // { id: 'pirvols', label: '🛰️ ПИР ВОЛС' },
   ];
 
   const handleTabClick = (id) => {
