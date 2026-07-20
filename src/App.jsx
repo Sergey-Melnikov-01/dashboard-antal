@@ -430,7 +430,7 @@ const CircularProgress = ({ percent, color, size = 130 }) => {
         position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
       }}>
-        <div style={{ fontSize: 30, fontWeight: 800, color: '#ffffff', lineHeight: 1 }}>{Math.round(p)}%</div>
+        <div style={{ fontSize: 30, fontWeight: 800, color: '#ffffff', lineHeight: 1 }}>{p.toFixed(1)}%</div>
         <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.6px' }}>выполнено</div>
       </div>
     </div>
@@ -462,7 +462,7 @@ const StageProgressBar = ({ stageName, doneKm, totalKm, color }) => {
 };
 
 // Карточка одной ветки
-const PirBranchCard = ({ branchKey, branchLabel, routes, color }) => {
+const PirBranchCard = ({ branchKey, branchLabel, routes, color, manualPct }) => {
   const [expanded, setExpanded] = useState(false);
 
   const agg = useMemo(() => {
@@ -500,21 +500,7 @@ const PirBranchCard = ({ branchKey, branchLabel, routes, color }) => {
 
       {/* Круговой прогресс */}
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-        <CircularProgress percent={agg.overallPercent} color={color} />
-      </div>
-
-      {/* КМ статистика */}
-      <div style={{ marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#ffffff' }}>
-          {agg.completedKm.toFixed(1)} км
-        </div>
-        <div style={{ fontSize: 12, color: '#94a3b8' }}>/ {agg.totalKm.toFixed(1)} км</div>
-      </div>
-      <div style={{ height: 7, background: 'rgba(255,255,255,0.05)', borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
-        <div style={{
-          width: `${Math.min(agg.overallPercent, 100)}%`, height: '100%', background: color,
-          boxShadow: `0 0 8px ${color}55`, transition: 'width 0.6s ease-out',
-        }} />
+        <CircularProgress percent={manualPct != null ? manualPct : agg.overallPercent} color={color} />
       </div>
 
       {/* Детализация этапов */}
@@ -578,6 +564,23 @@ const PirTab = ({ pirVolsData }) => {
     return routes.length > 0 ? routes : PIR_ROUTES_DATA;
   }, [pirVolsData]);
 
+  const manualPct = useMemo(() => {
+    const result = { total: null, green: null, blue: null, red: null };
+    if (!Array.isArray(pirVolsData)) return result;
+    for (let ri = 0; ri < pirVolsData.length; ri++) {
+      const row = pirVolsData[ri];
+      if (!row || !row[1]) continue;
+      const label = String(row[1]).toLowerCase().trim();
+      const val = parseFloat(row[2]);
+      if (isNaN(val)) continue;
+      if (label.includes('общая')) result.total = val * 100;
+      else if (label.includes('зелен')) result.green = val * 100;
+      else if (label.includes('синя') || label.includes('голуб')) result.blue = val * 100;
+      else if (label.includes('красн')) result.red = val * 100;
+    }
+    return result;
+  }, [pirVolsData]);
+
   const grouped = useMemo(() => {
     const g = { green: [], red: [], blue: [] };
     routesData.forEach(r => { if (g[r.branch]) g[r.branch].push(r); });
@@ -599,13 +602,14 @@ const PirTab = ({ pirVolsData }) => {
     <>
       {/* Сводка сверху — прогресс-бар протяжённости */}
       {(() => {
-        const doneKm = totals.totalKm * (totals.pct / 100);
-        const fillPct = Math.min(totals.pct, 100);
+        const displayPct = manualPct.total != null ? manualPct.total : totals.pct;
+        const doneKm = totals.totalKm * (displayPct / 100);
+        const fillPct = Math.min(displayPct, 100);
         return (
           <div style={{ ...card, marginBottom: 20 }}>
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 14, fontWeight: 800, color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '1.2px', marginBottom: 4 }}>
-                Общая протяжённость ПИР</div>
+                Общая готовность ПИР</div>
             </div>
 
             {/* Закруглённый бар */}
@@ -622,18 +626,10 @@ const PirTab = ({ pirVolsData }) => {
                 paddingRight: 14,
               }}>
                 <span style={{ fontSize: 14, fontWeight: 800, color: '#0b1120', whiteSpace: 'nowrap' }}>
-                  {totals.pct.toFixed(1)}%
+                  {displayPct.toFixed(1)}%
                 </span>
               </div>
             </div>
-
-            {/* Подпись под баром */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 12 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#2de2a6' }}>
-                 Выполнено {doneKm.toFixed(0)} км
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#cbd5e1' }}>из {totals.totalKm.toFixed(0)} км</div>
-              </div>
           </div>
         );
       })()}
@@ -647,6 +643,7 @@ const PirTab = ({ pirVolsData }) => {
             branchLabel={PIR_BRANCH_META[bk].label}
             color={PIR_BRANCH_META[bk].color}
             routes={grouped[bk]}
+            manualPct={manualPct[bk]}
           />
         ))}
       </div>
@@ -687,8 +684,6 @@ export default function App() {
     { id: 'schedule', label: '📈 Метрики' },
     { id: 'materials', label: '📦 ТМЦ' },
     { id: 'pir', label: '📋 ПИР/ПСД' },
-    // Временно скрыта — раскомментировать, когда будет готова
-    // { id: 'pirvols', label: '🛰️ ПИР ВОЛС' },
   ];
 
   const handleTabClick = (id) => {
@@ -1557,6 +1552,14 @@ export default function App() {
                   ПИР
                 </button>
                 <button
+                  onClick={() => setPirMode('vetki')}
+                  className={`bubbly-button ${pirMode === 'vetki' ? 'active' : ''}`}
+                  aria-pressed={pirMode === 'vetki'}
+                  style={{ padding: '6px 12px' }}
+                >
+                  Ветки
+                </button>
+                <button
                   onClick={() => setPirMode('psd')}
                   className={`bubbly-button ${pirMode === 'psd' ? 'active' : ''}`}
                   aria-pressed={pirMode === 'psd'}
@@ -1566,7 +1569,7 @@ export default function App() {
                 </button>
               </div>
 
-              {pirMode === 'pir' ? (
+              {pirMode === 'pir' && (
                 <>
                   {/* Трекер ВОЛС во всю ширину */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
@@ -1592,8 +1595,11 @@ export default function App() {
                     </div>
                   </div>
                 </>
-              ) : (
-                /* ПСД — в разработке (срабатывает, если pirMode !== 'pir') */
+              )}
+              {pirMode === 'vetki' && (
+                <PirTab pirVolsData={pirVolsData} />
+              )}
+              {pirMode === 'psd' && (
                 <div style={{
                   ...card,
                   display: 'flex',
@@ -1611,11 +1617,6 @@ export default function App() {
               )}
             </>
           )}   
-
-      {activeTab === 'pirvols' && (
-        <PirTab pirVolsData={pirVolsData} />
-      )}
-
       {activeTab === 'schedule' && (
         <>
           {/* FILTERS for METRICS (same UI components, but options from metrics) */}
@@ -1837,7 +1838,7 @@ export default function App() {
         </>
       )}
 
-      {activeTab !== 'construction' && activeTab !== 'schedule' && activeTab !== 'pir' && activeTab !== 'materials' && activeTab !== 'pirvols' && (
+      {activeTab !== 'construction' && activeTab !== 'schedule' && activeTab !== 'pir' && activeTab !== 'materials' && (
         <div style={{ ...card, alignItems: 'center', justifyContent: 'center', minHeight: '300px', textAlign: 'center' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#2de2a6', marginBottom: '8px' }}>В разработке</div>
