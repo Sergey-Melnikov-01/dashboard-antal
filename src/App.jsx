@@ -385,7 +385,22 @@ function parseVolsSheet(rows) {
     if (s.includes('синя') || s.includes('голуб')) return 'blue';
     return 'red';
   }
-  return rows.slice(3)
+  const manualPct = { green: null, blue: null, red: null, overall: null };
+  rows.forEach(r => {
+    if (!r || !r[1]) return;
+    const label = String(r[1]).toLowerCase().trim();
+    const fromC = String(r[2] || '').replace('%', '').replace(',', '.').trim();
+    const fromE = String(r[4] || '').replace('%', '').replace(',', '.').trim();
+    const pct = parseFloat(fromC) || parseFloat(fromE) || null;
+    if (pct == null) return;
+    if (label.includes('общ')) manualPct.overall = pct;
+    else if (label.includes('зелен')) manualPct.green = pct;
+    else if (label.includes('синя') || label.includes('голуб')) manualPct.blue = pct;
+    else if (label.includes('красн')) manualPct.red = pct;
+  });
+
+  // ✅ ИЗМЕНИ: было "return rows.slice(3)", стало "const routes = rows.slice(3)"
+  const routes = rows.slice(3)
     .filter(r => r[4] && r[5])
     .map((r, idx) => ({
       id: idx + 1,
@@ -401,6 +416,9 @@ function parseVolsSheet(rows) {
         done: pirIsDone(toDate(r[9 + i * 2 + 1])),
       })),
     }));
+
+  // ✅ ДОБАВЬ ЭТО вместо старого закрывающего });
+  return { routes, manualPct };
 }
 
 const PIR_BRANCH_META = {
@@ -486,6 +504,8 @@ const PirBranchCard = ({ branchKey, branchLabel, routes, color, manualPct }) => 
     return { totalKm, overallPercent, completedKm, stages };
   }, [routes]);
 
+  
+
   return (
     <div style={{
       background: '#1a2332', border: `1px solid ${color}33`, borderRadius: 18, padding: 20,
@@ -533,53 +553,49 @@ const PirBranchCard = ({ branchKey, branchLabel, routes, color, manualPct }) => 
 // PIR вкладка — три карточки веток
 const PirTab = ({ pirVolsData }) => {
   const routesData = useMemo(() => {
-    if (!Array.isArray(pirVolsData) || pirVolsData.length < 4) return PIR_ROUTES_DATA;
-    const today = new Date();
-    const row2 = pirVolsData[1] || [];
-    const stageNames = [];
-    for (let i = 9; i < row2.length; i += 2) {
-      const s = row2[i];
-      if (s && String(s).trim()) stageNames.push(String(s).trim());
+  if (!Array.isArray(pirVolsData) || pirVolsData.length === 0) return PIR_ROUTES_DATA;
+  const today = new Date();
+  const routes = [];
+  pirVolsData.forEach(row => {
+    const cells = Array.isArray(row) ? row : Object.values(row || {});
+    // Маршрут определяем по колонке "Ветка" (index 4) — строки 174-177 и заголовки не имеют ветки
+    const branchRaw = String(cells[4] || '').toLowerCase().trim();
+    let branch = null;
+    if (branchRaw.includes('зелен')) branch = 'green';
+    else if (branchRaw.includes('син') || branchRaw.includes('голуб')) branch = 'blue';
+    else if (branchRaw.includes('красн')) branch = 'red';
+    if (!branch) return; // не маршрут — пропускаем
+    const name = String(cells[3] || cells[0] || '').trim();
+    const km = parseFloat(cells[5]) || 0;
+    const stages = [];
+    for (let i = 0; i < 21; i++) {
+      const planDate = String(cells[9 + i * 2] || '').trim() || null;
+      const factDate = String(cells[10 + i * 2] || '').trim() || null;
+      const done = factDate ? new Date(factDate) <= today : false;
+      stages.push({ name: PIR_STAGE_NAMES[i] || `Этап ${i + 1}`, planDate, factDate, done });
     }
-    const routes = [];
-    for (let ri = 3; ri < pirVolsData.length; ri++) {
-      const row = pirVolsData[ri];
-      if (!row || !row[0]) continue;
-      const name = String(row[3] || '').trim();
-      if (!name) continue;
-      const branchRaw = String(row[4] || '').toLowerCase();
-      let branch = 'red';
-      if (branchRaw.includes('зелен')) branch = 'green';
-      else if (branchRaw.includes('син') || branchRaw.includes('голуб')) branch = 'blue';
-      const km = parseFloat(row[5]) || 0;
-      const stages = [];
-      for (let i = 0; i < 21 && (9 + i * 2 + 1) < row.length; i++) {
-        const planDate = String(row[9 + i * 2] || '').trim() || null;
-        const factDate = String(row[9 + i * 2 + 1] || '').trim() || null;
-        const done = factDate ? new Date(factDate) <= today : false;
-        stages.push({ name: stageNames[i] || PIR_STAGE_NAMES[i] || `Этап ${i+1}`, planDate, factDate, done });
-      }
-      routes.push({ id: routes.length + 1, name, region: String(row[0]||''), district: String(row[1]||''), branch, km, stages });
-    }
-    return routes.length > 0 ? routes : PIR_ROUTES_DATA;
-  }, [pirVolsData]);
+    routes.push({ id: routes.length + 1, name, region: String(cells[0] || '').trim(), district: String(cells[1] || '').trim(), branch, km, stages });
+  });
+  return routes.length > 0 ? routes : PIR_ROUTES_DATA;
+}, [pirVolsData]);
 
-  const manualPct = useMemo(() => {
-    const result = { total: null, green: null, blue: null, red: null };
-    if (!Array.isArray(pirVolsData)) return result;
-    for (let ri = 0; ri < pirVolsData.length; ri++) {
-      const row = pirVolsData[ri];
-      if (!row || !row[1]) continue;
-      const label = String(row[1]).toLowerCase().trim();
-      const val = parseFloat(row[2]);
-      if (isNaN(val)) continue;
-      if (label.includes('общая')) result.total = val * 100;
-      else if (label.includes('зелен')) result.green = val * 100;
-      else if (label.includes('синя') || label.includes('голуб')) result.blue = val * 100;
-      else if (label.includes('красн')) result.red = val * 100;
-    }
-    return result;
-  }, [pirVolsData]);
+const manualPct = useMemo(() => {
+  const result = { total: null, green: null, blue: null, red: null };
+  if (!Array.isArray(pirVolsData)) return result;
+  for (let ri = 0; ri < pirVolsData.length; ri++) {
+    const row = pirVolsData[ri];
+    if (!row) continue;
+    const label = String(row[0] || '').toLowerCase().trim(); // ← col A: метка
+    if (!label) continue;
+    const val = parseFloat(row[1]); // ← col B: десятичное значение
+    if (isNaN(val) || val === 0) continue;
+    if (label.includes('общ')) result.total = val * 100;
+    else if (label.includes('зелен')) result.green = val * 100;
+    else if (label.includes('синя') || label.includes('голуб')) result.blue = val * 100;
+    else if (label.includes('красн')) result.red = val * 100;
+  }
+  return result;
+}, [pirVolsData]);
 
   const grouped = useMemo(() => {
     const g = { green: [], red: [], blue: [] };
@@ -592,7 +608,7 @@ const PirTab = ({ pirVolsData }) => {
     let completedKm = 0;
     routesData.forEach(r => {
       const doneStages = r.stages.reduce((c, st) => c + (st.done ? 1 : 0), 0);
-      completedKm += (r.km || 0) * (doneStages / 21);
+      completedKm += (r.kmы || 0) * (doneStages / 21);
     });
     const pct = totalKm > 0 ? (completedKm / totalKm) * 100 : 0;
     return { routes: routesData.length, totalKm, pct };
