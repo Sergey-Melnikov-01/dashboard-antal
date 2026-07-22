@@ -1575,7 +1575,7 @@ export default function App() {
                 >
                   Ветки
                 </button>
-                <button
+                 {false && (<button
                   onClick={() => setPirMode('psd')}
                   className={`bubbly-button ${pirMode === 'psd' ? 'active' : ''}`}
                   aria-pressed={pirMode === 'psd'}
@@ -1583,6 +1583,7 @@ export default function App() {
                 >
                   ПСД
                 </button>
+                  )} 
               </div>
 
               {pirMode === 'pir' && (
