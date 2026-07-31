@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { CircularProgress } from './CircularProgress';
 import { StageProgressBar } from './StageProgressBar';
 

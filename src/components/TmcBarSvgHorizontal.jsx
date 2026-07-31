@@ -1,6 +1,3 @@
-import React from 'react';
-import { roundedTopRect } from '../utils/svg';
-
 export const TmcBarSvgHorizontal = ({ data }) => {
   if (!data || data.length === 0) return null;
   const maxVal = Math.max(...data.flatMap(d => [d.plan, d.fact]), 1);

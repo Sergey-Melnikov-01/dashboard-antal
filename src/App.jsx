@@ -1,23 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
   LineChart, Line
 } from 'recharts';
 
-import { parseDate, toNum, formatCurrency } from './utils/format';
-
-import { getTmcUch, detectMaterials } from './utils/tmc';
-import { roundedTopRect } from './utils/svg';
-
-import { PIR_STAGE_NAMES, PIR_RAW, PIR_TODAY, pirIsDone, PIR_ROUTES_DATA, parseVolsSheet, PIR_BRANCH_META } from './data/pirStages';
+import { parseDate, toNum } from './utils/format';
 
 import { ProgressBar } from './components/ProgressBar';
-import { TmcBarSvg } from './components/TmcBarSvg';
-import { TmcBarSvgHorizontal } from './components/TmcBarSvgHorizontal';
-import { CircularProgress } from './components/CircularProgress';
-import { StageProgressBar } from './components/StageProgressBar';
-import { PirBranchCard } from './components/PirBranchCard';
 
 import { PirTab } from './components/PirTab';
 
@@ -27,41 +17,20 @@ import { useSharedFilters } from './hooks/useSharedFilters';
 
 import { useDatasetView, filterRows } from './hooks/useDatasetView';
 
-const API_URL = "https://script.google.com/macros/s/AKfycbw6XLjGzrrzg4knwf9QQ62zgv5jnKxvzZnZKhLUTSFX14b2dqa_iJZn2y5GjzPBgkH3/exec";
+import { PushDropdown } from './components/PushDropdown';
+
+import { MaterialsTab } from './components/MaterialsTab';
+
+import { PirPsdTab } from './components/PirPsdTab';
+
+import { MetricTrendChart } from './components/MetricTrendChart';
 
 const bg = '#1c1d26';
 const card = { background: '#21222d', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '18px', padding: '22px', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' };
 const lbl = { color: '#94a3b8', fontSize: '11px', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.8px' };
 
-// Custom dark tooltip for PIR chart
-const PirTooltip = ({ active, payload }) => {
-  if (!active || !payload || !payload.length) return null;
-  const d = payload[0].payload;
-  return (
-    <div style={{
-      background: '#0f1724',
-      color: '#e2e8f0',
-      padding: 10,
-      borderRadius: 8,
-      border: '1px solid rgba(255,255,255,0.06)',
-      boxShadow: '0 8px 24px rgba(2,6,23,0.6)',
-      fontSize: 13,
-      minWidth: 160
-    }}>
-      <div style={{ fontWeight: 700, marginBottom: 6 }}>{d.name}</div>
-      <div style={{ color: '#9ca3af', fontSize: 12 }}>Регион: {d.region}</div>
-      <div style={{ color: '#2de2a6', fontWeight: 800, marginTop: 8 }}>Готовность: {d.progress}%</div>
-      {d.status ? <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 6 }}>Статус: {d.status}</div> : null}
-    </div>
-  );
-};
-
 export default function App() {
-  const { allData, metricsData, pirData, pirVolsData, tmcData, tmcDvaData, datesData, loading } = useDashboardData();
-  const [pirMode, setPirMode] = useState('psd');
-  const [tmcMode, setTmcMode] = useState('sklad'); // 'sklad' | 'zakup'
-  const [selectedTmcSection, setSelectedTmcSection] = useState('Все');
-  const [selectedTmcMaterial, setSelectedTmcMaterial] = useState('Все');
+  const { allData, metricsData, pirData, pirVolsData, tmcData, tmcDvaData, datesData, loading } = useDashboardData();       
   const [activeTab, setActiveTab] = useState('construction'); // 'construction' | 'schedule' (metrics)
   const [animatingTab, setAnimatingTab] = useState(null);
 
@@ -73,6 +42,9 @@ export default function App() {
     selectedDate, setSelectedDate,
     openDropdown, setOpenDropdown,
   } = useSharedFilters();
+
+  // Метрики: какой график сейчас показывать под KPI-карточками ('Нет' = выключено)
+  const [selectedMetricCharts, setSelectedMetricCharts] = useState([]);
 
   // PIR-specific region filter
   const [selectedPirRegion, setSelectedPirRegion] = useState('Все');
@@ -89,13 +61,6 @@ export default function App() {
     setAnimatingTab(id);
     setTimeout(() => setAnimatingTab(null), 700);
   };
-
-  useEffect(() => {
-    if (activeTab === 'pir') {
-      setPirMode('pir');
-    }
-  }, [activeTab]);
-
   // -----------------------------
   // COMMON (for СМР)
   // -----------------------------
@@ -137,6 +102,7 @@ export default function App() {
     const pct = plan > 0 ? ((fact / plan) * 100).toFixed(1) : 0;
     return { totalFact: fact, totalPlan: plan, deviation: dev, totalPercent: pct };
   }, [filtered]);
+  
   // Стоимости: Материалы и СМР
   const { matPlan, matFact, matDev, smrPlan, smrFact, smrDev, nzsPlan, nzsFact} = useMemo(() => {
     const mp = filtered.reduce((s, r) => s + toNum(r["Материалы [План]"]), 0);
@@ -280,7 +246,7 @@ export default function App() {
     };
   }, [metricsFiltered]);
 
-  // keep these for potential future use (not displayed now)
+  // Динамика по датам для всех 4 категорий метрик (Кабель/Труба/Засыпка/ГНБ)
   const metricsTrend = useMemo(() => {
     return metricsDates.map(date => {
       const rows = filterRows(metricsData, {
@@ -291,9 +257,36 @@ export default function App() {
       });
       const cableP = rows.reduce((s, r) => s + toNum(r["Кабель План"]), 0);
       const cableF = rows.reduce((s, r) => s + toNum(r["Кабель Факт"]), 0);
-      return { date, cablePlan: +cableP.toFixed(1), cableFact: +cableF.toFixed(1) };
+      const pipeP = rows.reduce((s, r) => s + toNum(r["Труба План"]), 0);
+      const pipeF = rows.reduce((s, r) => s + toNum(r["Труба Факт"]), 0);
+      const backfillP = rows.reduce((s, r) => s + toNum(r["Засыпка План"]), 0);
+      const backfillF = rows.reduce((s, r) => s + toNum(r["Засыпка Факт"]), 0);
+      const hddP = rows.reduce((s, r) => s + toNum(r["ГНБ План"]), 0);
+      const hddF = rows.reduce((s, r) => s + toNum(r["ГНБ Факт"]), 0);
+      return {
+        date,
+        cablePlan: +cableP.toFixed(1), cableFact: +cableF.toFixed(1),
+        pipePlan: +pipeP.toFixed(1), pipeFact: +pipeF.toFixed(1),
+        backfillPlan: +backfillP.toFixed(1), backfillFact: +backfillF.toFixed(1),
+        hddPlan: +hddP.toFixed(1), hddFact: +hddF.toFixed(1),
+      };
     });
   }, [metricsDates, metricsData, selectedBranch, selectedContractor, selectedSection]);
+
+  // Данные для графика выбранной в фильтре "Графики" категории, в формате { date, plan, fact } — как у trendData на СМР
+  const metricChartConfig = {
+    'Кабель': { planKey: 'cablePlan', factKey: 'cableFact', unit: 'км' },
+    'Труба': { planKey: 'pipePlan', factKey: 'pipeFact', unit: 'км' },
+    'Засыпка': { planKey: 'backfillPlan', factKey: 'backfillFact', unit: 'км' },
+    'ГНБ': { planKey: 'hddPlan', factKey: 'hddFact', unit: 'м' },
+  };
+  const metricChartDataByCategory = useMemo(() => {
+    const result = {};
+    Object.entries(metricChartConfig).forEach(([catName, cfg]) => {
+      result[catName] = metricsTrend.map(row => ({ date: row.date, plan: row[cfg.planKey], fact: row[cfg.factKey] }));
+    });
+    return result;
+  }, [metricsTrend]);
 
   const metricsSectionBars = useMemo(() => {
     // aggregate per section for current metric date & filters
@@ -306,69 +299,6 @@ export default function App() {
     });
     return Object.values(map).sort((a, b) => b.cablePlan + b.cableFact - (a.cablePlan + a.cableFact));
   }, [metricsFiltered]);
-
-  // -----------------------------
-  // ТМЦ (DB_TMC / DB_TMCdva)
-  // -----------------------------
-  // ТМЦ: активный датасет
-  const currentTmcData = useMemo(() => {
-    return tmcMode === 'sklad' ? tmcData : tmcDvaData;
-  }, [tmcMode, tmcData, tmcDvaData]);
-
-  // ТМЦ: список участков
-  const tmcSections = useMemo(() => {
-    const allMats = detectMaterials(currentTmcData);
-    return [...new Set(currentTmcData.map(r => getTmcUch(r)).filter(v => {
-      if (!v || v === 'Общее количество' || v.startsWith('Unnamed')) return false;
-      const rows = currentTmcData.filter(r => getTmcUch(r) === v);
-      if (selectedTmcMaterial === 'Все') {
-        return allMats.some(({ planKey, factKey }) =>
-          rows.some(r => toNum(r[planKey]) > 0 || toNum(r[factKey]) > 0)
-        );
-      }
-      const mat = allMats.find(({ name }) => name === selectedTmcMaterial);
-      if (!mat) return false;
-      return rows.some(r => toNum(r[mat.planKey]) > 0 || toNum(r[mat.factKey]) > 0);
-    }))].sort();
-  }, [currentTmcData, selectedTmcMaterial]);
-
-  useEffect(() => {
-    if (selectedTmcSection !== 'Все' && !tmcSections.includes(selectedTmcSection)) {
-      setSelectedTmcSection('Все');
-    }
-  }, [tmcSections, selectedTmcSection]);
-
-  // ТМЦ: детектированные материалы
-  const tmcMaterials = useMemo(() => {
-    const allMats = detectMaterials(currentTmcData);
-    const rows = currentTmcData.filter(r => {
-      const uch = getTmcUch(r);
-      return uch && uch !== 'Общее количество' && !uch.startsWith('Unnamed');
-    });
-    const filteredRows = selectedTmcSection === 'Все' ? rows : rows.filter(r => getTmcUch(r) === selectedTmcSection);
-    return allMats.filter(({ planKey, factKey }) =>
-      filteredRows.some(r => toNum(r[planKey]) > 0 || toNum(r[factKey]) > 0)
-    );
-  }, [currentTmcData, selectedTmcSection]);
-
-  // ТМЦ: данные для графика с агрегацией по участку
-  const tmcChartData = useMemo(() => {
-    const rows = currentTmcData.filter(r => {
-      const uch = getTmcUch(r);
-      return uch && uch !== 'Общее количество' && !uch.startsWith('Unnamed') && uch !== '';
-    });
-    const filteredRows = selectedTmcSection === 'Все'
-      ? rows
-      : rows.filter(r => getTmcUch(r) === selectedTmcSection);
-
-    return tmcMaterials
-      .filter(({ name }) => selectedTmcMaterial === 'Все' || name === selectedTmcMaterial)
-      .map(({ name, planKey, factKey }) => {
-        const plan = filteredRows.reduce((sum, r) => sum + toNum(r[planKey]), 0);
-        const fact = filteredRows.reduce((sum, r) => sum + toNum(r[factKey]), 0);
-        return { name, plan, fact };
-      }).filter(d => d.plan > 0 || d.fact > 0);
-  }, [currentTmcData, selectedTmcSection, tmcMaterials, selectedTmcMaterial]);
 
   // -----------------------------
   // PIR (DB_PIR) — new section (one chart + region filter)
@@ -406,176 +336,6 @@ export default function App() {
     const notStarted = pirFiltered.filter(d => d.progress <= 0).length;
     return { done, inProgress, notStarted };
   }, [pirFiltered]);
-
-  // -----------------------------
-  // PIR Stage Tracking (DB_PIR — новый формат: Трекер ВОЛС / Трекер МУС)
-  // -----------------------------
-  const pirStages = useMemo(() => {
-    const vols = [];
-    const mus = [];
-    let currentTracker = null;
-
-    (pirData || []).forEach(r => {
-      // Первая колонка — название строки/этапа
-      const title = String(
-        r["ПИР План-фактный анализ 25.06"] ??
-        r["Название"] ??
-        r["Этап"] ??
-        Object.values(r)[0] ??
-        ''
-      ).trim();
-
-      if (!title) return;
-
-      if (title.includes('Трекер ВОЛС')) { currentTracker = 'vols'; return; }
-      if (title.includes('Трекер МУС'))  { currentTracker = 'mus';  return; }
-
-      const unit   = String(r["Unnamed: 1"] ?? r["Единица измерения"] ?? r["Еденица измерения"] ?? '').trim();
-      const plan   = toNum(r["Unnamed: 2"] ?? r["Объём (план)"] ?? 0);
-      const fact   = toNum(r["Unnamed: 3"] ?? r["Объём (факт)"] ?? 0);
-      const rawPct = r["Unnamed: 4"] ?? r["% Выполнения"] ?? r["% выполнения"] ?? 0;
-      const pct    = toNum(rawPct);
-
-      if (plan > 0 || fact > 0 || pct > 0) {
-        const item = { name: title, unit, plan, fact, pct };
-        if (currentTracker === 'vols') vols.push(item);
-        if (currentTracker === 'mus')  mus.push(item);
-      }
-    });
-
-    // Сортируем списки по убыванию процента выполнения
-    const sortedVols = [...vols];
-    const sortedMus = [...mus];
-
-    return { vols: sortedVols, mus: sortedMus };
-  }, [pirData]);
-
-  const toggleDropdown = (name) => setOpenDropdown(prev => prev === name ? null : name);
-
-  const PushDropdown = ({ name, label, value, options, onChange, onReset }) => {
-    const isOpen = openDropdown === name;
-    const wrapperRef = React.useRef(null);
-    const [openLeft, setOpenLeft] = React.useState(false);
-
-    const handleToggle = () => {
-      if (!isOpen && wrapperRef.current) {
-        const rect = wrapperRef.current.getBoundingClientRect();
-        setOpenLeft(rect.left + 280 > window.innerWidth);
-      }
-      toggleDropdown(name);
-    };
-
-    return (
-      <div ref={wrapperRef} style={{ position: 'relative' }}>
-        <style>{`
-          .push-btn {
-            border-radius: 10px;
-            border: 2px outset #2de2a640;
-            position: relative;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 16px;
-            color: #eee;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            overflow: hidden;
-            box-shadow: 0 0 8px rgba(0,0,0,0.8);
-            font-family: verdana, sans-serif;
-            font-size: 11px;
-            font-weight: bold;
-            cursor: pointer;
-            background: linear-gradient(160deg, #2a2b38, #21222d);
-            text-shadow: 0px 0px 2px rgba(0,0,0,.5);
-            transition: 0.2s;
-            white-space: nowrap;
-            user-select: none;
-          }
-          .push-btn.active-filter {
-            border-color: #2de2a6;
-            color: #2de2a6;
-            box-shadow: 0 0 8px #2de2a640, 0 0 20px #2de2a620;
-          }
-          .push-btn:active, .push-btn.open {
-            border: 2px outset #2de2a6;
-            color: #fff;
-            background: linear-gradient(160deg, #2e3048, #21222d);
-            text-shadow: 0px 0px 4px #2de2a6;
-            box-shadow: 0 0 10px #2de2a6, 0 0 30px #2de2a640;
-          }
-          .push-btn span { position: absolute; display: block; }
-          .push-btn span:nth-child(1) { top: 0; left: -100%; width: 100%; height: 1px; background: linear-gradient(90deg, transparent, #2de2a6); }
-          .push-btn.open span:nth-child(1) { left: 100%; transition: 0.8s; }
-          .push-btn span:nth-child(2) { top: -100%; right: 0; width: 1px; height: 100%; background: linear-gradient(180deg, transparent, #2de2a6); }
-          .push-btn.open span:nth-child(2) { top: 100%; transition: 0.8s; transition-delay: 0.2s; }
-          .push-btn span:nth-child(3) { bottom: 0; right: -100%; width: 100%; height: 1px; background: linear-gradient(270deg, transparent, #2de2a6); }
-          .push-btn.open span:nth-child(3) { right: 100%; transition: 0.8s; transition-delay: 0.4s; }
-          .push-btn span:nth-child(4) { bottom: -100%; left: 0; width: 1px; height: 100%; background: linear-gradient(360deg, transparent, #2de2a6); }
-          .push-btn.open span:nth-child(4) { bottom: 100%; transition: 0.8s; transition-delay: 0.6s; }
-          .push-dropdown-menu {
-            position: absolute;
-            top: calc(100% + 6px);
-            z-index: 9999;
-            background: #21222d;
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 10px;
-            min-width: 200px;
-            max-width: calc(100vw - 24px);
-            max-height: 260px;
-            overflow-y: auto;
-            overflow-x: hidden;
-            box-shadow: 0 0 20px rgba(45,226,166,0.15);
-            padding: 4px 0;
-          }
-          .push-dropdown-item {
-            padding: 9px 16px;
-            font-size: 12px;
-            color: #9ca3af;
-            cursor: pointer;
-            transition: background 0.15s, color 0.15s;
-          }
-          .push-dropdown-item:hover { background: rgba(255,255,255,0.05); color: #2de2a6; }
-          .push-dropdown-item.selected { color: #2de2a6; font-weight: bold; }
-        `}</style>
-        <button
-          className={`push-btn ${isOpen ? 'open' : ''} ${(value && value !== 'Все') ? 'active-filter' : ''}`}
-          onClick={handleToggle}
-        >
-          <span></span><span></span><span></span><span></span>
-          {label}: {value || 'Все'}
-          <span style={{ position: 'static', marginLeft: '4px', fontSize: '9px' }}>{isOpen ? '▲' : '▼'}</span>
-        </button>
-        {isOpen && (
-          <div
-            className="push-dropdown-menu"
-            style={openLeft ? { right: 0 } : { left: 0 }}
-          >
-            <div
-              className={`push-dropdown-item ${!value || value === 'Все' || value === '' ? 'selected' : ''}`}
-              onClick={() => { onChange(onReset !== undefined ? onReset : 'Все'); setOpenDropdown(null); }}
-            >
-              {(() => {
-                if (label === 'Участок') return 'Все участки';
-                if (label === 'Ветка') return 'Все ветки';
-                if (label === 'Подрядчик') return 'Все подрядчики';
-                if (label === 'Дата') return 'Даты';
-                return `Все ${label.toLowerCase()}`;
-              })()}
-            </div>
-            {options.map(opt => (
-              <div
-                key={opt}
-                className={`push-dropdown-item ${value === opt ? 'selected' : ''}`}
-                onClick={() => { onChange(opt); setOpenDropdown(null); }}
-              >
-                {opt}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1c1d26', color: 'white', fontFamily: 'sans-serif' }}>
@@ -617,6 +377,8 @@ export default function App() {
           {/* ... (оставил без изменений) */}
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px', alignItems: 'flex-start' }} onClick={e => { if (e.target === e.currentTarget) setOpenDropdown(null); }}>
             <PushDropdown
+              openDropdown={openDropdown}
+              setOpenDropdown={setOpenDropdown}
               name="branch"
               label="Ветка"
               value={selectedBranch}
@@ -624,6 +386,8 @@ export default function App() {
               onChange={v => { setSelectedBranch(v); setSelectedSection('Все'); }}
             />
             <PushDropdown
+              openDropdown={openDropdown}
+              setOpenDropdown={setOpenDropdown}
               name="contractor"
               label="Подрядчик"
               value={selectedContractor}
@@ -631,6 +395,8 @@ export default function App() {
               onChange={v => { setSelectedContractor(v); setSelectedSection('Все'); }}
             />
             <PushDropdown
+              openDropdown={openDropdown}
+              setOpenDropdown={setOpenDropdown}
               name="section"
               label="Участок"
               value={selectedSection}
@@ -655,6 +421,8 @@ export default function App() {
               }}
             />
             <PushDropdown
+              openDropdown={openDropdown}
+              setOpenDropdown={setOpenDropdown}
               name="date"
               label="Дата"
               value={selectedDate}
@@ -883,91 +651,16 @@ export default function App() {
           )}
         </>
       )}
-
           {activeTab === 'pir' && (
-            <>
-              {/* Кнопки ПИР / ПСД */}
-              <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-                <button
-                  onClick={() => setPirMode('pir')}
-                  className={`bubbly-button ${pirMode === 'pir' ? 'active' : ''}`}
-                  aria-pressed={pirMode === 'pir'}
-                  style={{ padding: '6px 12px' }}
-                >
-                  ПИР
-                </button>
-                <button
-                  onClick={() => setPirMode('vetki')}
-                  className={`bubbly-button ${pirMode === 'vetki' ? 'active' : ''}`}
-                  aria-pressed={pirMode === 'vetki'}
-                  style={{ padding: '6px 12px' }}
-                >
-                  Ветки
-                </button>
-                 {false && (<button
-                  onClick={() => setPirMode('psd')}
-                  className={`bubbly-button ${pirMode === 'psd' ? 'active' : ''}`}
-                  aria-pressed={pirMode === 'psd'}
-                  style={{ padding: '6px 12px' }}
-                >
-                  ПСД
-                </button>
-                  )} 
-              </div>
-
-              {pirMode === 'pir' && (
-                <>
-                  {/* Трекер ВОЛС во всю ширину */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
-                    <div style={card}>
-                      <div style={{
-                        ...lbl,
-                        color: '#2de2a6',
-                        fontSize: '13px',
-                        fontWeight: '800',
-                        borderBottom: '1px solid rgba(45,226,166,0.15)',
-                        paddingBottom: '10px',
-                        marginBottom: '20px',
-                        letterSpacing: '1px'
-                      }}>
-                         ТРЕКЕР ВОЛС — Линейная часть
-                      </div>
-                      {pirStages.vols.length > 0
-                        ? pirStages.vols.map((s, i) => (
-                            <ProgressBar key={i} label={s.name} plan={s.plan} fact={s.fact} pct={s.pct} unit={s.unit} />
-                          ))
-                        : <div style={{ color: '#64748b', fontSize: 13 }}>Нет данных по ВОЛС</div>
-                      }
-                    </div>
-                  </div>
-                </>
-              )}
-              {pirMode === 'vetki' && (
-                <PirTab pirVolsData={pirVolsData} />
-              )}
-              {pirMode === 'psd' && (
-                <div style={{
-                  ...card,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  height: 180,
-                  textAlign: 'center',
-                  color: '#cbd5e1',
-                }}>
-                  <div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: '#ffffff', marginBottom: 6 }}>ПСД — в разработке</div>
-                    <div style={{ fontSize: 13, opacity: 0.85 }}>Здесь будет детализация по проектно-сметной документации.</div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}   
+            <PirPsdTab activeTab={activeTab} pirData={pirData} pirVolsData={pirVolsData} />
+          )} 
       {activeTab === 'schedule' && (
         <>
           {/* FILTERS for METRICS (same UI components, but options from metrics) */}
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px', alignItems: 'flex-start' }} onClick={e => { if (e.target === e.currentTarget) setOpenDropdown(null); }}>
             <PushDropdown
+              openDropdown={openDropdown}
+              setOpenDropdown={setOpenDropdown}
               name="branch_metrics"
               label="Ветка"
               value={selectedBranch}
@@ -975,6 +668,8 @@ export default function App() {
               onChange={v => { setSelectedBranch(v); setSelectedSection('Все'); }}
             />
             <PushDropdown
+              openDropdown={openDropdown}
+              setOpenDropdown={setOpenDropdown}
               name="contractor_metrics"
               label="Подрядчик"
               value={selectedContractor}
@@ -982,6 +677,8 @@ export default function App() {
               onChange={v => { setSelectedContractor(v); setSelectedSection('Все'); }}
             />
             <PushDropdown
+              openDropdown={openDropdown}
+              setOpenDropdown={setOpenDropdown}
               name="section_metrics"
               label="Участок"
               value={selectedSection}
@@ -1005,12 +702,24 @@ export default function App() {
               }}
             />
             <PushDropdown
+              openDropdown={openDropdown}
+              setOpenDropdown={setOpenDropdown}
               name="date_metrics"
               label="Дата"
               value={selectedDate}
               options={dateOptionsForDropdown}
               onChange={v => setSelectedDate(v === 'Все' ? '' : v)}
               onReset=""
+            />
+            <PushDropdown
+              openDropdown={openDropdown}
+              setOpenDropdown={setOpenDropdown}
+              name="metric_chart"
+              label="Графики"
+              value={selectedMetricCharts}
+              options={['Кабель', 'Труба', 'Засыпка', 'ГНБ']}
+              onChange={v => setSelectedMetricCharts(v)}
+              multi
             />
           </div>
 
@@ -1019,54 +728,62 @@ export default function App() {
               Pipe values shown under Cable values as requested. */}
 
           <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
-            {/* Column 1: Plan (Cable top, Pipe below) */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ ...card }}>
-                <div style={lbl}>Кабель (план)</div>
-                <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2898ff' }}>
-                  {metricsKPI.cablePlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
-                </div>
-              </div>
-              <div style={{ ...card }}>
-                <div style={lbl}>Труба (план)</div>
-                <div style={{ fontSize: '22px', fontWeight: '700', color: '#2898ff' }}>
-                  {metricsKPI.pipePlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
-                </div>
+            <div style={{ ...card }}>
+              <div style={lbl}>Кабель (план)</div>
+              <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2898ff' }}>
+                {metricsKPI.cablePlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
               </div>
             </div>
+            <div style={{ ...card }}>
+              <div style={lbl}>Кабель (факт)</div>
+              <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2de2a6' }}>
+                {metricsKPI.cableFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
+              </div>
+            </div>
+            <div style={{ ...card }}>
+              <div style={lbl}>Отклонение кабеля</div>
+              <div style={{ fontSize: '22px', fontWeight: 'bold', color: metricsKPI.cableDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
+                {(metricsKPI.cableDev > 0 ? '+' : '') + metricsKPI.cableDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
+              </div>
+            </div>
+          </div>
 
-            {/* Column 2: Fact (Cable top, Pipe below) */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ ...card }}>
-                <div style={lbl}>Кабель (факт)</div>
-                <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#2de2a6' }}>
-                  {metricsKPI.cableFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
-                </div>
-              </div>
-              <div style={{ ...card }}>
-                <div style={lbl}>Труба (факт)</div>
-                <div style={{ fontSize: '22px', fontWeight: '700', color: '#2de2a6' }}>
-                  {metricsKPI.pipeFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
-                </div>
-              </div>
-            </div>
+          {selectedMetricCharts.includes('Кабель') && (
+            <MetricTrendChart
+              title="Кабель"
+              data={metricChartDataByCategory['Кабель']}
+              unit={metricChartConfig['Кабель'].unit}
+            />
+          )}
 
-            {/* Column 3: Deviation (meters) */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ ...card }}>
-                <div style={lbl}>Отклонение кабеля</div>
-                <div style={{ fontSize: '22px', fontWeight: 'bold', color: metricsKPI.cableDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
-                  {(metricsKPI.cableDev > 0 ? '+' : '') + metricsKPI.cableDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
-                </div>
-              </div>
-              <div style={{ ...card }}>
-                <div style={lbl}>Отклонение трубы</div>
-                <div style={{ fontSize: '22px', fontWeight: '700', color: metricsKPI.pipeDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
-                  {(metricsKPI.pipeDev > 0 ? '+' : '') + metricsKPI.pipeDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
-                </div>
+          <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
+            <div style={{ ...card }}>
+              <div style={lbl}>Труба (план)</div>
+              <div style={{ fontSize: '22px', fontWeight: '700', color: '#2898ff' }}>
+                {metricsKPI.pipePlan.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
               </div>
             </div>
+            <div style={{ ...card }}>
+              <div style={lbl}>Труба (факт)</div>
+              <div style={{ fontSize: '22px', fontWeight: '700', color: '#2de2a6' }}>
+                {metricsKPI.pipeFact.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
+              </div>
             </div>
+            <div style={{ ...card }}>
+              <div style={lbl}>Отклонение трубы</div>
+              <div style={{ fontSize: '22px', fontWeight: '700', color: metricsKPI.pipeDev < 0 ? '#ff4d4d' : '#ff9b45' }}>
+                {(metricsKPI.pipeDev > 0 ? '+' : '') + metricsKPI.pipeDev.toFixed(1)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
+              </div>
+            </div>
+          </div>
+
+          {selectedMetricCharts.includes('Труба') && (
+            <MetricTrendChart
+              title="Труба"
+              data={metricChartDataByCategory['Труба']}
+              unit={metricChartConfig['Труба'].unit}
+            />
+          )}  
 
           {/* Next: Backfill group (Засыпка) */}
           <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
@@ -1090,6 +807,14 @@ export default function App() {
             </div>
           </div>
 
+          {selectedMetricCharts.includes('Засыпка') && (
+            <MetricTrendChart
+              title="Засыпка"
+              data={metricChartDataByCategory['Засыпка']}
+              unit={metricChartConfig['Засыпка'].unit}
+            />
+          )}
+
           {/* Next: HDD group (ГНБ) */}
           <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
             <div style={card}>
@@ -1111,77 +836,23 @@ export default function App() {
               </div>
             </div>
           </div>
+          {selectedMetricCharts.includes('ГНБ') && (
+            <MetricTrendChart
+              title="ГНБ"
+              data={metricChartDataByCategory['ГНБ']}
+              unit={metricChartConfig['ГНБ'].unit}
+            />
+          )}
         </>
       )}
 
       {activeTab === 'materials' && (
-        <>
-          {/* Sub-mode buttons */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-            {[
-              { id: 'sklad', label: 'Склад' },
-              { id: 'zakup', label: 'Закуп' },
-            ].map(btn => (
-              <button
-                key={btn.id}
-                onClick={() => { setTmcMode(btn.id); setSelectedTmcSection('Все'); setSelectedTmcMaterial('Все'); }}
-                className={`bubbly-button ${tmcMode === btn.id ? 'active' : ''}`}
-              >
-                {btn.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Фильтры: Участок + Материал */}
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }} onClick={e => { if (e.target === e.currentTarget) setOpenDropdown(null); }}>
-            <PushDropdown
-              name="tmc_section"
-              label="Участок"
-              value={selectedTmcSection}
-              options={tmcSections}
-              onChange={v => setSelectedTmcSection(v)}
-            />
-            <PushDropdown
-                name="tmc_material"
-                label="Материал"
-                value={selectedTmcMaterial}
-                options={tmcMaterials.map(m => m.name)}
-                onChange={v => setSelectedTmcMaterial(v)}
-                alignRight
-              />
-          </div>
-
-          {/* Chart area */}
-          {currentTmcData.length === 0 ? (
-            <div style={{ ...card, alignItems: 'center', justifyContent: 'center', minHeight: 220, textAlign: 'center' }}>
-              <div style={{ fontSize: 14, color: '#6b7280' }}>Загрузка данных ТМЦ...</div>
-            </div>
-          ) : tmcChartData.length === 0 ? (
-            <div style={{ ...card, alignItems: 'center', justifyContent: 'center', minHeight: 220, textAlign: 'center' }}>
-              <div style={{ fontSize: 14, color: '#6b7280' }}>Нет данных для отображения (все значения равны 0)</div>
-            </div>
-          ) : (
-            <div style={card}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <div style={lbl}>{tmcMode === 'sklad' ? 'Материалы — Склад' : 'Материалы — Закуп'}</div>
-                  <div style={{ display: 'flex', gap: 16 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
-                      <div style={{ width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(180deg, #5ab4ff, #0a4590)' }} />
-                      План
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
-                      <div style={{ width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(180deg, #2de2a6, #0a7050)' }} />
-                      Факт
-                  </div>
-                </div>
-              </div>
-              {tmcChartData.length <= 3
-                ? <TmcBarSvgHorizontal data={tmcChartData} />
-                : <TmcBarSvg data={tmcChartData} />
-              }
-            </div>
-          )}
-        </>
+        <MaterialsTab
+          tmcData={tmcData}
+          tmcDvaData={tmcDvaData}
+          openDropdown={openDropdown}
+          setOpenDropdown={setOpenDropdown}
+        />
       )}
 
       {activeTab !== 'construction' && activeTab !== 'schedule' && activeTab !== 'pir' && activeTab !== 'materials' && (
