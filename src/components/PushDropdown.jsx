@@ -141,7 +141,7 @@ export const PushDropdown = ({ name, label, value, options, onChange, onReset, o
               className={`push-dropdown-item ${multi ? (Array.isArray(value) && value.includes(opt) ? 'selected' : '') : (value === opt ? 'selected' : '')}`}
               onClick={() => handleOptionClick(opt)}
             >
-              {multi ? (Array.isArray(value) && value.includes(opt) ? '☑ ' : '☐ ') : ''}{opt}
+              {opt}
             </div>
           ))}
         </div>
