@@ -3,9 +3,10 @@ import { card, lbl } from '../styles/theme';
 import { toNum } from '../utils/format';
 import { ProgressBar } from './ProgressBar';
 import { PirTab } from './PirTab';
+import { MusTab } from './MusTab';
 
 // Обёртка вкладки «ПИР/ПСД»: переключатель режимов (ПИР / Ветки / ПСД) + их содержимое
-export const PirPsdTab = ({ activeTab, pirData, pirVolsData }) => {
+export const PirPsdTab = ({ activeTab, pirData, pirVolsData, musData, musColors }) => {
   const [pirMode, setPirMode] = useState('psd');
 
   useEffect(() => {
@@ -75,7 +76,15 @@ export const PirPsdTab = ({ activeTab, pirData, pirVolsData }) => {
           aria-pressed={pirMode === 'vetki'}
           style={{ padding: '6px 12px' }}
         >
-          Ветки
+          ПИР - Ветки
+        </button>
+        <button
+          onClick={() => setPirMode('mus')}
+          className={`bubbly-button ${pirMode === 'mus' ? 'active' : ''}`}
+          aria-pressed={pirMode === 'mus'}
+          style={{ padding: '6px 12px' }}
+        >
+          МУС - Ветки
         </button>
          {false && (<button
           onClick={() => setPirMode('psd')}
@@ -117,6 +126,9 @@ export const PirPsdTab = ({ activeTab, pirData, pirVolsData }) => {
       )}
       {pirMode === 'vetki' && (
         <PirTab pirVolsData={pirVolsData} />
+      )}
+      {pirMode === 'mus' && (
+        <MusTab musData={musData} musColors={musColors} />
       )}
       {pirMode === 'psd' && (
         <div style={{

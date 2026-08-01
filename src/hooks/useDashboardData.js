@@ -8,6 +8,8 @@ export function useDashboardData() {
   const [metricsData, setMetricsData] = useState([]);
   const [pirData, setPirData] = useState([]); // <-- added state for DB_PIR
   const [pirVolsData, setPirVolsData] = useState([]);
+  const [musData, setMusData] = useState([]); // DB_PIR_MUS — трекер МУС
+  const [musColors, setMusColors] = useState([]); // цвет заливки колонки "Наименование МУС" по строкам (для деления на ветки)
   const [tmcData, setTmcData] = useState([]);
   const [tmcDvaData, setTmcDvaData] = useState([]);
   const [datesData, setDatesData] = useState([]); // DB_DATES — отклонение сроков
@@ -35,6 +37,8 @@ export function useDashboardData() {
       // PIR data (if present in payload)
       setPirData(Array.isArray(raw?.DB_PIR) ? raw.DB_PIR : []);
       setPirVolsData(Array.isArray(raw?.DB_PIR_VOLS) ? raw.DB_PIR_VOLS : []);
+      setMusData(Array.isArray(raw?.DB_PIR_MUS) ? raw.DB_PIR_MUS : []);
+      setMusColors(Array.isArray(raw?.DB_PIR_MUS_COLORS) ? raw.DB_PIR_MUS_COLORS : []);
 
       // ТМЦ
       console.log('Все ключи API:', Object.keys(raw));
@@ -53,5 +57,5 @@ export function useDashboardData() {
     });
   }, []);
 
-  return { allData, metricsData, pirData, pirVolsData, tmcData, tmcDvaData, datesData, loading };
+  return { allData, metricsData, pirData, pirVolsData, musData, musColors, tmcData, tmcDvaData, datesData, loading };
 }
