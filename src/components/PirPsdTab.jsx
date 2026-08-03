@@ -5,6 +5,9 @@ import { ProgressBar } from './ProgressBar';
 import { PirTab } from './PirTab';
 import { MusTab } from './MusTab';
 
+// Единый стиль для всех переключателей режимов (ПИР / ПИР-Ветки / МУС-Ветки) — чтобы они гарантированно выглядели одинаково
+const modeButtonStyle = { padding: '8px 18px', fontSize: '13px' };
+
 // Обёртка вкладки «ПИР/ПСД»: переключатель режимов (ПИР / Ветки / ПСД) + их содержимое
 export const PirPsdTab = ({ activeTab, pirData, pirVolsData, musData, musColors }) => {
   const [pirMode, setPirMode] = useState('psd');
@@ -66,7 +69,7 @@ export const PirPsdTab = ({ activeTab, pirData, pirVolsData, musData, musColors 
           onClick={() => setPirMode('pir')}
           className={`bubbly-button ${pirMode === 'pir' ? 'active' : ''}`}
           aria-pressed={pirMode === 'pir'}
-          style={{ padding: '6px 12px' }}
+          style={modeButtonStyle}
         >
           ПИР
         </button>
@@ -74,7 +77,7 @@ export const PirPsdTab = ({ activeTab, pirData, pirVolsData, musData, musColors 
           onClick={() => setPirMode('vetki')}
           className={`bubbly-button ${pirMode === 'vetki' ? 'active' : ''}`}
           aria-pressed={pirMode === 'vetki'}
-          style={{ padding: '6px 12px' }}
+          style={modeButtonStyle}
         >
           ПИР - Ветки
         </button>
@@ -82,7 +85,7 @@ export const PirPsdTab = ({ activeTab, pirData, pirVolsData, musData, musColors 
           onClick={() => setPirMode('mus')}
           className={`bubbly-button ${pirMode === 'mus' ? 'active' : ''}`}
           aria-pressed={pirMode === 'mus'}
-          style={{ padding: '6px 12px' }}
+          style={modeButtonStyle}
         >
           МУС - Ветки
         </button>
@@ -90,7 +93,7 @@ export const PirPsdTab = ({ activeTab, pirData, pirVolsData, musData, musColors 
           onClick={() => setPirMode('psd')}
           className={`bubbly-button ${pirMode === 'psd' ? 'active' : ''}`}
           aria-pressed={pirMode === 'psd'}
-          style={{ padding: '6px 12px' }}
+          style={modeButtonStyle}
         >
           ПСД
         </button>
