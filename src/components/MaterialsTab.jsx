@@ -1,10 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { card, lbl } from '../styles/theme';
 import { toNum } from '../utils/format';
 import { getTmcUch, detectMaterials } from '../utils/tmc';
 import { PushDropdown } from './PushDropdown';
-import { TmcBarSvg } from './TmcBarSvg';
-import { TmcBarSvgHorizontal } from './TmcBarSvgHorizontal';
+import { TmcMaterialList } from './TmcMaterialList';
 
 // Вкладка «ТМЦ»: переключение Склад/Закуп, фильтры по участку и материалу, бар-чарт план/факт
 export const MaterialsTab = ({ tmcData, tmcDvaData, openDropdown, setOpenDropdown }) => {
@@ -123,23 +122,10 @@ export const MaterialsTab = ({ tmcData, tmcDvaData, openDropdown, setOpenDropdow
         </div>
       ) : (
         <div style={card}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ marginBottom: 16 }}>
             <div style={lbl}>{tmcMode === 'sklad' ? 'Материалы — Склад' : 'Материалы — Закуп'}</div>
-              <div style={{ display: 'flex', gap: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
-                  <div style={{ width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(180deg, #5ab4ff, #0a4590)' }} />
-                  План
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
-                  <div style={{ width: 14, height: 14, borderRadius: 3, background: 'linear-gradient(180deg, #2de2a6, #0a7050)' }} />
-                  Факт
-              </div>
-            </div>
           </div>
-          {tmcChartData.length <= 3
-            ? <TmcBarSvgHorizontal data={tmcChartData} />
-            : <TmcBarSvg data={tmcChartData} />
-          }
+          <TmcMaterialList data={tmcChartData} />
         </div>
       )}
     </>
