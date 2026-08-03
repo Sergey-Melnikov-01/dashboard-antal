@@ -1,13 +1,26 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { card } from '../styles/theme';
-import { MusStageDots } from './MusStageDots';
+import { MUS_STAGE_NAMES } from '../data/musStages';
+import { MusStageProgressBar } from './MusStageProgressBar';
 
-// Карточка одной ветки МУС: "X из Y готовы" + разворачиваемый список объектов
+// Карточка одной ветки МУС: "X из Y готовы" + "X из Y согласовано" + разворачиваемая сводка по 14 этапам
 export const MusBranchCard = ({ branchKey, branchLabel, color, objects }) => {
   const [expanded, setExpanded] = useState(false);
 
   const total = objects.length;
   const fullyDoneCount = objects.filter(o => o.fullyDone).length;
+  const approvedCount = objects.filter(o => o.approved).length;
+
+  // Агрегация по каждому из 14 этапов: сколько объектов ветки прошли этот этап.
+  // Этапы, где прогресс = 0, не показываем (аналогично вкладке "ПИР - Ветки")
+  const stageAgg = useMemo(() => {
+    return MUS_STAGE_NAMES
+      .map((stageName, i) => ({
+        stageName,
+        doneCount: objects.filter(o => o.stages[i]?.done).length,
+      }))
+      .filter(s => s.doneCount > 0);
+  }, [objects]);
 
   return (
     <div style={{ ...card, flex: '1 1 320px', minWidth: 300 }}>
@@ -32,9 +45,23 @@ export const MusBranchCard = ({ branchKey, branchLabel, color, objects }) => {
 
       {expanded && (
         <div style={{ maxHeight: 420, overflowY: 'auto', overflowX: 'hidden', paddingRight: 4 }}>
-          {objects.length > 0
-            ? objects.map(obj => <MusStageDots key={obj.id} musObject={obj} color={color} />)
-            : <div style={{ color: '#64748b', fontSize: 13 }}>Нет объектов в этой ветке</div>
+          <MusStageProgressBar
+            stageName="Согласовано заказчиком"
+            doneCount={approvedCount}
+            totalCount={total}
+            color={color}
+          />
+          {stageAgg.length > 0
+            ? stageAgg.map(s => (
+                <MusStageProgressBar
+                  key={s.stageName}
+                  stageName={s.stageName}
+                  doneCount={s.doneCount}
+                  totalCount={total}
+                  color={color}
+                />
+              ))
+            : <div style={{ color: '#64748b', fontSize: 13 }}>Нет прогресса ни по одному этапу</div>
           }
         </div>
       )}

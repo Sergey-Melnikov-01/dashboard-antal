@@ -72,6 +72,9 @@ export function parseMusSheet(musData, musColors) {
 
     const region = String(cells[1] || '').trim();
     const district = String(cells[2] || '').trim();
+    const approvedRaw = cells[6]; // "Согласован заказчиком" — дата, если пусто — не согласовано
+    const approvedDate = approvedRaw ? String(approvedRaw).trim() : null;
+    const approved = !!approvedDate;
 
     const stages = [];
     for (let i = 0; i < MUS_STAGE_NAMES.length; i++) {
@@ -90,6 +93,8 @@ export function parseMusSheet(musData, musColors) {
       region,
       district,
       branch,
+      approved,
+      approvedDate,
       stages,
       doneCount,
       totalStages: MUS_STAGE_NAMES.length,

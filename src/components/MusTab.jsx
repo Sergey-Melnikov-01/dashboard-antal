@@ -31,7 +31,7 @@ export const MusTab = ({ musData, musColors }) => {
       <div style={{ ...card, marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '1.2px' }}>
-            Готовность ИРД
+            Готовность ИРД МУС
           </div>
           <div style={{ fontSize: 15, fontWeight: 800, color: '#2de2a6' }}>
             {fullyDoneCount} <span style={{ color: '#94a3b8', fontWeight: 600 }}>из {total}</span>
