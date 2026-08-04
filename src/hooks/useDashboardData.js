@@ -10,6 +10,9 @@ export function useDashboardData() {
   const [pirVolsData, setPirVolsData] = useState([]);
   const [musData, setMusData] = useState([]); // DB_PIR_MUS — трекер МУС
   const [musColors, setMusColors] = useState([]); // цвет заливки колонки "Наименование МУС" по строкам (для деления на ветки)
+  const [usGreenData, setUsGreenData] = useState([]); // DB_US_GREEN — вкладка "УС", зелёная ветка
+  const [usBlueData, setUsBlueData] = useState([]);   // DB_US_BLUE — вкладка "УС", синяя ветка
+  const [usRedData, setUsRedData] = useState([]);     // DB_US_RED — вкладка "УС", красная ветка
   const [tmcData, setTmcData] = useState([]);
   const [tmcDvaData, setTmcDvaData] = useState([]);
   const [datesData, setDatesData] = useState([]); // DB_DATES — отклонение сроков
@@ -39,6 +42,9 @@ export function useDashboardData() {
       setPirVolsData(Array.isArray(raw?.DB_PIR_VOLS) ? raw.DB_PIR_VOLS : []);
       setMusData(Array.isArray(raw?.DB_PIR_MUS) ? raw.DB_PIR_MUS : []);
       setMusColors(Array.isArray(raw?.DB_PIR_MUS_COLORS) ? raw.DB_PIR_MUS_COLORS : []);
+      setUsGreenData(Array.isArray(raw?.DB_US_GREEN) ? raw.DB_US_GREEN : []);
+      setUsBlueData(Array.isArray(raw?.DB_US_BLUE) ? raw.DB_US_BLUE : []);
+      setUsRedData(Array.isArray(raw?.DB_US_RED) ? raw.DB_US_RED : []);
 
       // ТМЦ
       console.log('Все ключи API:', Object.keys(raw));
@@ -57,5 +63,5 @@ export function useDashboardData() {
     });
   }, []);
 
-  return { allData, metricsData, pirData, pirVolsData, musData, musColors, tmcData, tmcDvaData, datesData, loading };
+  return { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, datesData, loading };
 }

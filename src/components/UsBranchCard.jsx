@@ -1,0 +1,59 @@
+import { useState } from 'react';
+import { card } from '../styles/theme';
+import { CircularProgress } from './CircularProgress';
+import { UsObjectProgressBar } from './UsObjectProgressBar';
+
+// Карточка одной ветки УС: гейдж среднего % + сумма в тенге + разворачиваемый список объектов с их % (как бар-чарт на листе Dashboard)
+export const UsBranchCard = ({ branchLabel, color, objects }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  const total = objects.length;
+  const avgPercent = total > 0 ? objects.reduce((s, o) => s + o.totalPercent, 0) / total : 0;
+  const totalMoney = objects.reduce((s, o) => s + o.totalMoney, 0);
+  const fullyDoneCount = objects.filter(o => o.fullyDone).length;
+
+  // Сортируем по убыванию % — сверху самые близкие к завершению
+  const sortedObjects = [...objects].sort((a, b) => b.totalPercent - a.totalPercent);
+
+  return (
+    <div style={{ ...card, flex: '1 1 340px', minWidth: 320 }}>
+      <div
+        onClick={() => setExpanded(e => !e)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', marginBottom: 16 }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: color }} />
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+            {branchLabel}
+          </div>
+        </div>
+        <div style={{ fontSize: 12, color: '#94a3b8' }}>{expanded ? '▲ свернуть' : '▼ развернуть'}</div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: expanded ? 16 : 0 }}>
+        <CircularProgress percent={avgPercent} color={color} size={110} />
+        <div>
+          <div style={{ fontSize: 13, color: '#94a3b8' }}>
+            <span style={{ fontSize: 20, fontWeight: 800, color: '#e2e8f0' }}>{fullyDoneCount}</span> из {total} готовы 
+          </div>
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Выполнено на</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color }}>{Math.round(totalMoney).toLocaleString('ru-RU')} тнг</div>
+        </div>
+      </div>
+
+      {expanded && (
+        <div style={{ maxHeight: 420, overflowY: 'auto', overflowX: 'hidden', paddingRight: 4 }}>
+          {sortedObjects.map(obj => (
+            <UsObjectProgressBar
+              key={obj.id}
+              name={obj.name}
+              percent={obj.totalPercent}
+              money={obj.totalMoney}
+              color={color}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
