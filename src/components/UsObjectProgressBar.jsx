@@ -4,7 +4,7 @@ export const UsObjectProgressBar = ({ name, percent, money, color }) => {
     <div style={{ marginBottom: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 5 }}>
         <div style={{ fontSize: 13, color: '#e2e8f0' }}>{name}</div>
-        <div style={{ fontSize: 13, fontWeight: 'bold', color, marginLeft: 10, whiteSpace: 'nowrap' }}>{percent.toFixed(1)}%</div>
+        <div style={{ fontSize: 13, fontWeight: 'bold', color, marginLeft: 10, whiteSpace: 'nowrap' }}>{percent.toFixed(2).replace('.', ',')}%</div>
       </div>
       <div style={{ height: 7, background: 'rgba(255,255,255,0.05)', borderRadius: 4, overflow: 'hidden' }}>
         <div style={{

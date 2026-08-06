@@ -1,5 +1,3 @@
-import React from 'react';
-
 export const CircularProgress = ({ percent, color, size = 130 }) => {
   const stroke = 11;
   const r = (size - stroke) / 2;
@@ -20,7 +18,7 @@ export const CircularProgress = ({ percent, color, size = 130 }) => {
         position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
       }}>
-        <div style={{ fontSize: 30, fontWeight: 800, color: '#ffffff', lineHeight: 1 }}>{p.toFixed(1)}%</div>
+        <div style={{ fontSize: 30, fontWeight: 800, color: '#ffffff', lineHeight: 1 }}>{p.toFixed(2).replace('.', ',')}%</div>
         <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.6px' }}>выполнено</div>
       </div>
     </div>

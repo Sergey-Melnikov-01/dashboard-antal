@@ -99,8 +99,9 @@ export function parseUsSheet(rawRows) {
     if (!row) continue;
     const code = row[0];
     const weight = row[2];
-    // Строки-заголовки разделов (например "2. СМР") не имеют собственного веса — пропускаем их,
-    // сумма баллов по входящим в раздел задачам даст тот же итог
+    // Пропускаем строки-заголовки разделов (нет кода задачи и нет веса) и итоговую строку-проверку внизу листа
+    // (у неё нет кода задачи, но есть суммарный вес 100 — она НЕ является задачей)
+    if (code === null || code === undefined || String(code).trim() === '') continue;
     if (weight === null || weight === undefined || weight === '' || isNaN(Number(weight))) continue;
     const codeStr = String(code).trim();
     objects.forEach(obj => {
@@ -118,7 +119,7 @@ export function parseUsSheet(rawRows) {
       id: i + 1,
       name: obj.name,
       tasksByCode: obj.tasksByCode,
-      totalPercent: +totalPoints.toFixed(1),
+      totalPercent: totalPoints,
       totalMoney,
       fullyDone: totalPoints >= 99.5, // сумма весов ≈100, берём с небольшим запасом на округление
     };

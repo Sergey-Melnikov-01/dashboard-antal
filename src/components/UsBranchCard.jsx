@@ -27,16 +27,17 @@ export const UsBranchCard = ({ branchLabel, color, objects }) => {
     if (total === 0) return [];
     return US_TASKS
       .map(task => {
-        // Сравниваем набранные баллы с весом задачи — надёжнее, чем "% выполнения",
-        // т.к. в Google Таблице процентная ячейка может хранить дробь (1 = 100%) вместо числа 100
-        const doneCount = objects.filter(o => {
+        // Суммируем частичный прогресс по объектам: если у объекта задача выполнена на 50%,
+        // она даёт 0.5 в общую сумму — а не только когда дошла до 100% (доля = баллы / вес задачи)
+        const progressSum = objects.reduce((s, o) => {
           const t = o.tasksByCode[task.code];
-          return t && t.points >= task.weight - 0.001;
-        }).length;
-        return { code: task.code, name: `${task.code}. ${task.name}`, doneCount };
+          if (!t) return s;
+          return s + Math.min(t.points / task.weight, 1);
+        }, 0);
+        return { code: task.code, name: `${task.code}. ${task.name}`, progressSum };
       })
-      .filter(t => t.doneCount > 0)
-      .sort((a, b) => b.doneCount - a.doneCount);
+      .filter(t => t.progressSum > 0)
+      .sort((a, b) => b.progressSum - a.progressSum);
   }, [objects, total]);
 
   return (
@@ -73,14 +74,14 @@ export const UsBranchCard = ({ branchLabel, color, objects }) => {
               className={`bubbly-button ${viewMode === 'objects' ? 'active' : ''}`}
               style={{ padding: '6px 14px', fontSize: 12 }}
             >
-              Узлы
+              По узлам 
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); setViewMode('tasks'); }}
               className={`bubbly-button ${viewMode === 'tasks' ? 'active' : ''}`}
               style={{ padding: '6px 14px', fontSize: 12 }}
             >
-              Этапы
+              По этапам
             </button>
           </div>
 
@@ -102,12 +103,12 @@ export const UsBranchCard = ({ branchLabel, color, objects }) => {
                     <MusStageProgressBar
                       key={t.code}
                       stageName={t.name}
-                      doneCount={t.doneCount}
+                      doneCount={+t.progressSum.toFixed(1)}
                       totalCount={total}
                       color={color}
                     />
                   ))
-                : <div style={{ color: '#64748b', fontSize: 13 }}>Нет завершённых этапов ни у одного объекта</div>
+                : <div style={{ color: '#64748b', fontSize: 13 }}>Нет прогресса ни по одному этапу</div>
             }
           </div>
         </>
