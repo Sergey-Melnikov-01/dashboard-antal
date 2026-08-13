@@ -20,7 +20,7 @@ const lbl = { color: '#94a3b8', fontSize: '11px', marginBottom: '6px', textTrans
 
 // ProgressBar — компонент для трекера этапов ПИР
 export default function App() {
-  const { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, datesData, loading } = useDashboardData();
+  const { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, datesData, smrPercentData, loading } = useDashboardData();
   const [activeTab, setActiveTab] = useState('construction'); // 'construction' | 'schedule' (metrics)
   const [animatingTab, setAnimatingTab] = useState(null);
 
@@ -277,6 +277,7 @@ export default function App() {
         <SmrTab
           allData={allData}
           datesData={datesData}
+          smrPercentData={smrPercentData}
           dates={dates}
           activeDate={activeDate}
           selectedBranch={selectedBranch} setSelectedBranch={setSelectedBranch}

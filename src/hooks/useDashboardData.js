@@ -16,6 +16,7 @@ export function useDashboardData() {
   const [tmcData, setTmcData] = useState([]);
   const [tmcDvaData, setTmcDvaData] = useState([]);
   const [datesData, setDatesData] = useState([]); // DB_DATES — отклонение сроков
+  const [smrPercentData, setSmrPercentData] = useState([]); // DB_SMR_PERCENT — ручной % выполнения по веткам
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -56,6 +57,9 @@ export function useDashboardData() {
       // DB_DATES — отклонение сроков
       setDatesData(Array.isArray(raw?.DB_DATES) ? raw.DB_DATES : []);
 
+      // DB_SMR_PERCENT — ручной % выполнения по веткам (история отчётов)
+      setSmrPercentData(Array.isArray(raw?.DB_SMR_PERCENT) ? raw.DB_SMR_PERCENT : []);
+
       setLoading(false);
     }).catch(err => {
       console.error('API load error', err);
@@ -63,5 +67,5 @@ export function useDashboardData() {
     });
   }, []);
 
-  return { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, datesData, loading };
+  return { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, datesData, smrPercentData, loading };
 }

@@ -42,7 +42,7 @@ export const PirBranchCard = ({ branchKey, branchLabel, routes, color, manualPct
 
       {/* Круговой прогресс */}
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-        <CircularProgress percent={manualPct != null ? manualPct : agg.overallPercent} color={color} />
+        <CircularProgress percent={manualPct != null ? manualPct : agg.overallPercent} color={color} decimals={1} />
       </div>
 
       {/* Детализация этапов */}

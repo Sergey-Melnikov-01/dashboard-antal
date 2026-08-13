@@ -1,12 +1,12 @@
 import React from 'react';
 
-export const CircularProgress = ({ percent, color, size = 130 }) => {
+export const CircularProgress = ({ percent, color, size = 130, decimals = 2 }) => {
   const stroke = 11;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const p = Math.max(0, Math.min(100, percent || 0));
   const offset = c - (p / 100) * c;
-  const percentLabel = p.toFixed(2).replace('.', ',');
+  const percentLabel = p.toFixed(decimals).replace('.', ',');
   // Целимся в ширину ~72% диаметра круга и подбираем шрифт под реальную длину строки —
   // так однозначный (4,37%) и двузначный (25,50%) процент выглядят одинаково аккуратно, не задевая кольцо
   const targetWidth = size * 0.72;

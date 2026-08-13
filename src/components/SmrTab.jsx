@@ -13,6 +13,7 @@ import { MetricTrendChart } from './MetricTrendChart';
 export const SmrTab = ({
   allData,
   datesData,
+  smrPercentData,
   dates,
   activeDate,
   selectedBranch, setSelectedBranch,
@@ -45,13 +46,63 @@ export const SmrTab = ({
     date: activeDate,
   });
 
-  const { totalFact, totalPlan, deviation, totalPercent } = useMemo(() => {
+  const { totalFact, totalPlan, deviation } = useMemo(() => {
     const fact = filtered.reduce((s, r) => s + toNum(r["Факт км"]), 0);
     const plan = filtered.reduce((s, r) => s + toNum(r["План км"]), 0);
     const dev = fact - plan;
-    const pct = plan > 0 ? ((fact / plan) * 100).toFixed(1) : 0;
-    return { totalFact: fact, totalPlan: plan, deviation: dev, totalPercent: pct };
+    return { totalFact: fact, totalPlan: plan, deviation: dev };
   }, [filtered]);
+
+  // «Выполнение» — теперь задаётся вручную в листе DB_SMR_PERCENT (Ветка, Дата отчета, Процент выполнения),
+  // а не считается из факт/план. Если для ветки нет значения — карточка показывает «—».
+  // При ВЕТКА = «Все» — средневзвешенное по веткам (вес = План км ветки за активную дату).
+  const smrPercent = useMemo(() => {
+    if (!Array.isArray(smrPercentData) || !smrPercentData.length) return null;
+
+    const parseAnyDate = s => {
+      if (!s) return new Date(0);
+      const str = String(s);
+      if (str.includes('T')) return new Date(str); // ISO
+      const [d, m, y] = str.split('.');            // dd.mm.yyyy
+      return new Date(y, m - 1, d);
+    };
+    const ad = activeDate ? parseDate(activeDate) : null;
+
+    // Последнее (по дате отчёта, не позже activeDate) ручное значение % для конкретной ветки
+    const getBranchPercent = (branchName) => {
+      let rows = smrPercentData.filter(r => r["Ветка"] === branchName);
+      if (ad) {
+        rows = rows.filter(r => parseAnyDate(r["Дата отчета"]) <= ad);
+      }
+      if (!rows.length) return null;
+      const latest = rows.reduce((a, b) =>
+        parseAnyDate(a["Дата отчета"]) >= parseAnyDate(b["Дата отчета"]) ? a : b
+      );
+      const raw = toNum(latest["Процент выполнения"]);
+      return raw || raw === 0 ? raw * 100 : null;
+    };
+
+    if (selectedBranch !== 'Все') {
+      return getBranchPercent(selectedBranch);
+    }
+
+    // «Все» — средневзвешенное по веткам, у которых есть ручное значение
+    let weightedSum = 0;
+    let weightTotal = 0;
+    branches.forEach(b => {
+      const pct = getBranchPercent(b);
+      if (pct === null) return;
+      const planSum = allData
+        .filter(r => String(r["Ветка"] || '').trim() === String(b).trim())
+        .filter(r => !activeDate || r["Дата отчета"] === activeDate)
+        .reduce((s, r) => s + toNum(r["План км"]), 0);
+      if (planSum <= 0) return;
+      weightedSum += pct * planSum;
+      weightTotal += planSum;
+    });
+
+    return weightTotal > 0 ? weightedSum / weightTotal : null;
+  }, [smrPercentData, selectedBranch, activeDate, branches, allData]);
 
   // Стоимости: Материалы и СМР
   const { matPlan, matFact, matDev, smrPlan, smrFact, smrDev, nzsPlan, nzsFact} = useMemo(() => {
@@ -237,9 +288,9 @@ export const SmrTab = ({
         { label: 'Отклонение', val: (deviation > 0 ? '+' : '') + deviation.toFixed(1), unit: 'км', color: deviation >= 0 ? '#2de2a6' : '#ff4d4d' },
         {
           label: 'Выполнение',
-          val: totalPercent,
-          unit: '%',
-          color: parseFloat(totalPercent) > 100 ? '#ff4d4d' : '#ff9b45'
+          val: smrPercent === null ? '—' : smrPercent.toFixed(1),
+          unit: smrPercent === null ? '' : '%',
+          color: smrPercent === null ? '#6b7280' : (smrPercent > 100 ? '#ff4d4d' : '#ff9b45')
         },
       ].map((kpi, i) => (
         <div key={i} style={card}>
