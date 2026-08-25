@@ -28,13 +28,18 @@ export const UsBranchCard = ({ branchLabel, color, objects }) => {
     return US_TASKS
       .map(task => {
         // Суммируем частичный прогресс по объектам: если у объекта задача выполнена на 50%,
-        // она даёт 0.5 в общую сумму — а не только когда дошла до 100% (доля = баллы / вес задачи)
-        const progressSum = objects.reduce((s, o) => {
+        // она даёт 0.5 в общую сумму — а не только когда дошла до 100% (доля = баллы / вес задачи).
+        // Параллельно считаем, сколько объектов вообще начали задачу (доля > 0) — для подписи "N узлов начали".
+        let progressSum = 0;
+        let startedCount = 0;
+        objects.forEach(o => {
           const t = o.tasksByCode[task.code];
-          if (!t) return s;
-          return s + Math.min(t.points / task.weight, 1);
-        }, 0);
-        return { code: task.code, name: `${task.code}. ${task.name}`, progressSum };
+          if (!t) return;
+          const share = Math.min(t.points / task.weight, 1);
+          progressSum += share;
+          if (share > 0) startedCount += 1;
+        });
+        return { code: task.code, name: `${task.code}. ${task.name}`, progressSum, startedCount };
       })
       .filter(t => t.progressSum > 0)
       .sort((a, b) => b.progressSum - a.progressSum);
@@ -105,6 +110,7 @@ export const UsBranchCard = ({ branchLabel, color, objects }) => {
                       stageName={t.name}
                       doneCount={+t.progressSum.toFixed(1)}
                       totalCount={total}
+                      startedCount={t.startedCount}
                       color={color}
                     />
                   ))

@@ -12,6 +12,7 @@ import { PirPsdTab } from './components/PirPsdTab';
 import { MetricTrendChart } from './components/MetricTrendChart';
 import { SmrTab } from './components/SmrTab';
 import { UsTab } from './components/UsTab';
+import { VolsMapTab } from './components/VolsMapTab';
 
 const bg = '#1c1d26';
 const card = { background: '#21222d', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '18px', padding: '22px', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' };
@@ -20,7 +21,7 @@ const lbl = { color: '#94a3b8', fontSize: '11px', marginBottom: '6px', textTrans
 
 // ProgressBar — компонент для трекера этапов ПИР
 export default function App() {
-  const { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, datesData, smrPercentData, loading } = useDashboardData();
+  const { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, loading } = useDashboardData();
   const [activeTab, setActiveTab] = useState('construction'); // 'construction' | 'schedule' (metrics)
   const [animatingTab, setAnimatingTab] = useState(null);
 
@@ -46,6 +47,7 @@ export default function App() {
     { id: 'materials', label: '📦 ТМЦ' },
     { id: 'pir', label: '📋 ПИР/ПСД' },
     { id: 'us', label: '📡 МУС' },
+    // { id: 'map', label: '🗺️ Карта' }, // временно скрыто перед публикацией — включить обратно раскомментировав эту строку
   ];
 
   const handleTabClick = (id) => {
@@ -497,7 +499,17 @@ export default function App() {
         />
       )}
 
-      {activeTab !== 'construction' && activeTab !== 'schedule' && activeTab !== 'pir' && activeTab !== 'materials' && activeTab !== 'us' && (
+      {/* Временно скрыто перед публикацией — данные и логика карты сохранены, просто не рендерится.
+          Чтобы вернуть: замените "false" на "activeTab === 'map'" и раскомментируйте кнопку в tabs выше */}
+      {false && (
+        <VolsMapTab
+          volsRouteData={volsRouteData}
+          musVolsData={musVolsData}
+          codVolsData={codVolsData}
+        />
+      )}
+
+      {activeTab !== 'construction' && activeTab !== 'schedule' && activeTab !== 'pir' && activeTab !== 'materials' && activeTab !== 'us' && activeTab !== 'map' && (
         <div style={{ ...card, alignItems: 'center', justifyContent: 'center', minHeight: '300px', textAlign: 'center' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#2de2a6', marginBottom: '8px' }}>В разработке</div>

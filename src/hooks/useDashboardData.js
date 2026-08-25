@@ -17,10 +17,15 @@ export function useDashboardData() {
   const [tmcDvaData, setTmcDvaData] = useState([]);
   const [datesData, setDatesData] = useState([]); // DB_DATES — отклонение сроков
   const [smrPercentData, setSmrPercentData] = useState([]); // DB_SMR_PERCENT — ручной % выполнения по веткам
+  const [volsRouteData, setVolsRouteData] = useState([]); // DB_VOLS_ROUTE — сегменты трассы ВОЛС для карты
+  const [musVolsData, setMusVolsData] = useState([]); // DB_MUS_VOLS — координаты МУС для карты
+  const [codVolsData, setCodVolsData] = useState([]); // DB_COD_VOLS — координаты ЦОД для карты (отдельно от МУС)
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(API_URL)
+    // cache-busting: без этого браузер/Google иногда отдают закэшированный ответ
+    // даже после правки таблицы — свежие данные не подтягиваются без перезагрузки через время
+    fetch(`${API_URL}?t=${Date.now()}`, { cache: 'no-store' })
       .then(res => res.json())
       .then(rawData => {
       const raw = rawData || {};
@@ -60,6 +65,15 @@ export function useDashboardData() {
       // DB_SMR_PERCENT — ручной % выполнения по веткам (история отчётов)
       setSmrPercentData(Array.isArray(raw?.DB_SMR_PERCENT) ? raw.DB_SMR_PERCENT : []);
 
+      // DB_VOLS_ROUTE — сегменты трассы ВОЛС (координаты точек А/Б, статус, % для карты)
+      setVolsRouteData(Array.isArray(raw?.DB_VOLS_ROUTE) ? raw.DB_VOLS_ROUTE : []);
+
+      // DB_MUS_VOLS — координаты и метаданные МУС для карты
+      setMusVolsData(Array.isArray(raw?.DB_MUS_VOLS) ? raw.DB_MUS_VOLS : []);
+
+      // DB_COD_VOLS — координаты ЦОД для карты (отдельный слой, не МУС)
+      setCodVolsData(Array.isArray(raw?.DB_COD_VOLS) ? raw.DB_COD_VOLS : []);
+
       setLoading(false);
     }).catch(err => {
       console.error('API load error', err);
@@ -67,5 +81,5 @@ export function useDashboardData() {
     });
   }, []);
 
-  return { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, datesData, smrPercentData, loading };
+  return { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, loading };
 }
