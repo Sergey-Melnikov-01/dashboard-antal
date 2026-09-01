@@ -20,6 +20,8 @@ export function useDashboardData() {
   const [volsRouteData, setVolsRouteData] = useState([]); // DB_VOLS_ROUTE — сегменты трассы ВОЛС для карты
   const [musVolsData, setMusVolsData] = useState([]); // DB_MUS_VOLS — координаты МУС для карты
   const [codVolsData, setCodVolsData] = useState([]); // DB_COD_VOLS — координаты ЦОД для карты (отдельно от МУС)
+  const [usHistoryData, setUsHistoryData] = useState([]); // DB_US_HISTORY — еженедельные снимки % готовности МУС для графика динамики
+  const [contractorsData, setContractorsData] = useState([]); // DB_CONTRACTORS_VOLS — кабелеукладчики/подрядчики на трассе
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -74,6 +76,12 @@ export function useDashboardData() {
       // DB_COD_VOLS — координаты ЦОД для карты (отдельный слой, не МУС)
       setCodVolsData(Array.isArray(raw?.DB_COD_VOLS) ? raw.DB_COD_VOLS : []);
 
+      // DB_US_HISTORY — еженедельные снимки % готовности МУС (для графика динамики на вкладке "МУС")
+      setUsHistoryData(Array.isArray(raw?.DB_US_HISTORY) ? raw.DB_US_HISTORY : []);
+
+      // DB_CONTRACTORS_VOLS — кабелеукладчики/подрядчики, активные на трассе
+      setContractorsData(Array.isArray(raw?.DB_CONTRACTORS_VOLS) ? raw.DB_CONTRACTORS_VOLS : []);
+
       setLoading(false);
     }).catch(err => {
       console.error('API load error', err);
@@ -81,5 +89,5 @@ export function useDashboardData() {
     });
   }, []);
 
-  return { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, loading };
+  return { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, contractorsData, usHistoryData, loading };
 }

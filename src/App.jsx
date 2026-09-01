@@ -21,7 +21,7 @@ const lbl = { color: '#94a3b8', fontSize: '11px', marginBottom: '6px', textTrans
 
 // ProgressBar — компонент для трекера этапов ПИР
 export default function App() {
-  const { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, loading } = useDashboardData();
+  const { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, contractorsData, usHistoryData, loading } = useDashboardData();
   const [activeTab, setActiveTab] = useState('construction'); // 'construction' | 'schedule' (metrics)
   const [animatingTab, setAnimatingTab] = useState(null);
 
@@ -47,7 +47,7 @@ export default function App() {
     { id: 'materials', label: '📦 ТМЦ' },
     { id: 'pir', label: '📋 ПИР/ПСД' },
     { id: 'us', label: '📡 МУС' },
-    // { id: 'map', label: '🗺️ Карта' }, // временно скрыто перед публикацией — включить обратно раскомментировав эту строку
+    //{ id: 'map', label: '🌍 Карта' }, 
   ];
 
   const handleTabClick = (id) => {
@@ -487,7 +487,7 @@ export default function App() {
       )}
 
       {activeTab === 'us' && (
-        <UsTab usGreenData={usGreenData} usBlueData={usBlueData} usRedData={usRedData} />
+        <UsTab usGreenData={usGreenData} usBlueData={usBlueData} usRedData={usRedData} usHistoryData={usHistoryData} />
       )}
 
       {activeTab === 'materials' && (
@@ -499,13 +499,15 @@ export default function App() {
         />
       )}
 
-      {/* Временно скрыто перед публикацией — данные и логика карты сохранены, просто не рендерится.
-          Чтобы вернуть: замените "false" на "activeTab === 'map'" и раскомментируйте кнопку в tabs выше */}
-      {false && (
+      {activeTab === 'map' && (
         <VolsMapTab
           volsRouteData={volsRouteData}
           musVolsData={musVolsData}
           codVolsData={codVolsData}
+          contractorsData={contractorsData}
+          usGreenData={usGreenData}
+          usBlueData={usBlueData}
+          usRedData={usRedData}
         />
       )}
 
