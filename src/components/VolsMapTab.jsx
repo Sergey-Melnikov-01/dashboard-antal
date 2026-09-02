@@ -25,6 +25,16 @@ const branchColor = (branch) => {
   return '#94a3b8';
 };
 
+// Затемняет цвет ветки — используется для завершённых объектов (построенные участки, готовые на 100% МУС),
+// чтобы визуально отличать их от активных/незавершённых без необходимости приглядываться к стилю линии
+const darkenColor = (hex, amount = 0.6) => {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.round(((num >> 16) & 0xff) * (1 - amount));
+  const g = Math.round(((num >> 8) & 0xff) * (1 - amount));
+  const b = Math.round((num & 0xff) * (1 - amount));
+  return `#${[r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')}`;
+};
+
 // Статус сегмента -> стиль линии (пунктир + прозрачность)
 // Значения в таблице: "построено", "строительство не завершено" (идёт стройка), "строительство не осуществлялось" (не начато)
 const statusStyle = (status) => {
@@ -173,7 +183,7 @@ const CONTRACTOR_ANCHOR_FRACTION = { x: 105 / 180, y: 60 / 120 };
 // на земле не имеет смысла. Поэтому раскладываем направление на "смотрит влево или вправо"
 // по восточной составляющей (sin) и просто зеркалим через scaleX, без вращения.
 function makeContractorIcon(directionDeg = 90) {
-  const W = 54, H = 36; // 2x от прежнего размера, уменьшено на 25%
+  const W = 72, H = 48; // 2x от прежнего размера
   const anchorX = W * CONTRACTOR_ANCHOR_FRACTION.x;
   const anchorY = H * CONTRACTOR_ANCHOR_FRACTION.y;
   const rad = ((directionDeg ?? 90) * Math.PI) / 180;
@@ -480,7 +490,8 @@ export function VolsMapTab({ volsRouteData = [], musVolsData = [], codVolsData =
 
           {segments.map((s, i) => {
             const style = statusStyle(s.status);
-            const color = branchColor(s.branch);
+            const isBuilt = (s.status || '').toLowerCase().includes('построено') && !(s.status || '').toLowerCase().includes('не построено');
+            const color = isBuilt ? darkenColor(branchColor(s.branch)) : branchColor(s.branch);
             return (
               <React.Fragment key={`seg-${i}`}>
                 {/* Тёмная обводка под линией — для контраста на пёстром спутниковом фоне */}
@@ -530,7 +541,10 @@ export function VolsMapTab({ volsRouteData = [], musVolsData = [], codVolsData =
             );
           })}
 
-          {showMus && musPoints.map((m, i) => (
+          {showMus && musPoints.map((m, i) => {
+            const isDone = m.percent !== null && m.percent >= 99.5; // тот же порог, что и "готов" на вкладке МУС
+            const musColor = isDone ? darkenColor(branchColor(m.branch)) : branchColor(m.branch);
+            return (
             <React.Fragment key={`mus-${i}`}>
               {/* Видимый маркер — чисто визуальный */}
               <CircleMarker
@@ -540,7 +554,7 @@ export function VolsMapTab({ volsRouteData = [], musVolsData = [], codVolsData =
                 pathOptions={{
                   color: '#0a0a0f',
                   weight: 2.5,
-                  fillColor: branchColor(m.branch),
+                  fillColor: musColor,
                   fillOpacity: 1,
                 }}
               />
@@ -566,7 +580,8 @@ export function VolsMapTab({ volsRouteData = [], musVolsData = [], codVolsData =
                 </LeafletTooltip>
               </CircleMarker>
             </React.Fragment>
-          ))}
+            );
+          })}
 
           {showCod && codPoints.map((c, i) => (
             <Marker key={`cod-${i}`} position={[c.lat, c.lon]} icon={codIcon}>
