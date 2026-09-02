@@ -48,6 +48,16 @@ const toNum = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
+// Как toNum, но допускает "90°" и подобное — отбрасывает всё, кроме цифр, точки/запятой и минуса.
+// Нужен для колонки "Направление", куда естественно вписывать градусы со значком "°"
+const toNumLoose = (v) => {
+  if (v === null || v === undefined || v === '') return null;
+  const cleaned = String(v).replace(',', '.').replace(/[^0-9.\-]/g, '');
+  if (cleaned === '' || cleaned === '-') return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+};
+
 // --- Геометрия для "прилипания" подрядчика к ближайшей линии участка ---
 // Используем простую плоскую проекцию (долгота масштабируется на cos широты для Казахстана,
 // ~48° с.ш.) — этого достаточно для визуального позиционирования на карте, не для навигации.
@@ -157,14 +167,21 @@ const CONTRACTOR_ANCHOR_FRACTION = { x: 105 / 180, y: 60 / 120 };
 
 // Создаёт иконку бульдозера, развёрнутую на нужный угол (0-360°, компас: 0/360=вверх, 90=вправо, 180=вниз, 270=влево).
 // Иконка нарисована "лицом вправо", поэтому к введённому углу прибавляем поправку -90°.
+// Иконка нарисована сбоку (профиль техники, как на референс-фото) — её можно только "развернуть"
+// влево/вправо зеркально, а не крутить на произвольный угол компаса: при повороте на 90°/180°
+// боковой силуэт визуально встаёт "на попа" или переворачивается вверх ногами, что для техники
+// на земле не имеет смысла. Поэтому раскладываем направление на "смотрит влево или вправо"
+// по восточной составляющей (sin) и просто зеркалим через scaleX, без вращения.
 function makeContractorIcon(directionDeg = 90) {
-  const W = 72, H = 48; // 2x от прежнего размера
+  const W = 54, H = 36; // 2x от прежнего размера, уменьшено на 25%
   const anchorX = W * CONTRACTOR_ANCHOR_FRACTION.x;
   const anchorY = H * CONTRACTOR_ANCHOR_FRACTION.y;
-  const cssRotation = (directionDeg ?? 90) - 90;
+  const rad = ((directionDeg ?? 90) * Math.PI) / 180;
+  const facingLeft = Math.sin(rad) < 0; // компас: 0=вверх,90=вправо,180=вниз,270=влево
+  const scaleX = facingLeft ? -1 : 1;
   return L.divIcon({
     className: '',
-    html: `<div style="width:${W}px;height:${H}px;transform:rotate(${cssRotation}deg);transform-origin:${CONTRACTOR_ANCHOR_FRACTION.x * 100}% ${CONTRACTOR_ANCHOR_FRACTION.y * 100}%;">
+    html: `<div style="width:${W}px;height:${H}px;transform:scaleX(${scaleX});transform-origin:${CONTRACTOR_ANCHOR_FRACTION.x * 100}% ${CONTRACTOR_ANCHOR_FRACTION.y * 100}%;">
       <svg width="${W}" height="${H}" viewBox="0 0 180 120" xmlns="http://www.w3.org/2000/svg"
           style="filter: drop-shadow(0 0 3px rgba(0,0,0,0.8));">
         ${CONTRACTOR_SVG_MARKUP}
@@ -334,17 +351,19 @@ export function VolsMapTab({ volsRouteData = [], musVolsData = [], codVolsData =
         const rawLon = toNum(r["Lon"]);
         if (rawLat === null || rawLon === null) return null;
 
-        const manualBearing = toNum(r["Направление"]);
-        const snapped = segments.length > 0 ? snapToNearestRoute(rawLat, rawLon, segments) : null;
-
-        const lat = snapped ? snapped.lat : rawLat;
-        const lon = snapped ? snapped.lon : rawLon;
-        const bearing = manualBearing !== null ? manualBearing : (snapped ? snapped.bearing : 90);
+        const manualBearing = toNumLoose(r["Направление"] ?? r["Направление "]);
+        // Прилипания к линии больше нет — точка ставится ровно там, где указаны координаты
+        // (можно поставить чуть в стороне от трассы). Поиск ближайшего сегмента используется
+        // только для расчёта направления по умолчанию, если "Направление" не заполнено вручную.
+        const nearest = manualBearing === null && segments.length > 0
+          ? snapToNearestRoute(rawLat, rawLon, segments)
+          : null;
+        const bearing = manualBearing !== null ? manualBearing : (nearest ? nearest.bearing : 90);
 
         return {
           name: r["Подрядчик"] || '',
           section: r["Участок"] || '',
-          lat, lon, bearing,
+          lat: rawLat, lon: rawLon, bearing,
         };
       })
       .filter(Boolean);
@@ -677,11 +696,9 @@ export function VolsMapTab({ volsRouteData = [], musVolsData = [], codVolsData =
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: '#94a3b8' }}>Участок</span>
-                <span style={{ color: '#e2e8f0', fontWeight: 600, textAlign: 'right' }}>{selectedContractor.section || '—'}</span>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Участок</div>
+              <div style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 600, lineHeight: 1.4 }}>{selectedContractor.section || '—'}</div>
             </div>
           </div>
         )}

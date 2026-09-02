@@ -47,7 +47,7 @@ export default function App() {
     { id: 'materials', label: '📦 ТМЦ' },
     { id: 'pir', label: '📋 ПИР/ПСД' },
     { id: 'us', label: '📡 МУС' },
-    //{ id: 'map', label: '🌍 Карта' }, 
+    { id: 'map', label: '🌍 Карта' }, 
   ];
 
   const handleTabClick = (id) => {
