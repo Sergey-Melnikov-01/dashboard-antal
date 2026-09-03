@@ -169,26 +169,25 @@ const CONTRACTOR_SVG_MARKUP = `
   <path d="M 32 30 C 15 40, 15 70, 32 80" fill="none" stroke="#212529" stroke-width="4" stroke-linecap="round"/>
 `;
 
-
 // Доля от ширины/высоты viewBox (180x120), где расположен корпус бульдозера — используется
 // и как якорь маркера (иконка "садится" на карту корпусом, а не серединой всей картинки с катушкой),
 // и как центр вращения (transform-origin), чтобы при повороте корпус оставался на месте, а не съезжал
 const CONTRACTOR_ANCHOR_FRACTION = { x: 105 / 180, y: 60 / 120 };
 
-// Создаёт иконку бульдозера, развёрнутую на нужный угол (0-360°, компас: 0/360=вверх, 90=вправо, 180=вниз, 270=влево).
-// Иконка нарисована "лицом вправо", поэтому к введённому углу прибавляем поправку -90°.
-// Иконка нарисована сбоку (профиль техники, как на референс-фото) — её можно только "развернуть"
-// влево/вправо зеркально, а не крутить на произвольный угол компаса: при повороте на 90°/180°
-// боковой силуэт визуально встаёт "на попа" или переворачивается вверх ногами, что для техники
-// на земле не имеет смысла. Поэтому раскладываем направление на "смотрит влево или вправо"
-// по восточной составляющей (sin) и просто зеркалим через scaleX, без вращения.
+// Создаёт иконку бульдозера, развёрнутую в нужную сторону (0-360°, компас: 0/360=вверх, 90=вправо, 180=вниз, 270=влево).
+// Иконка нарисована сбоку (профиль техники) и по умолчанию "смотрит" влево (ковш слева, кабина справа) —
+// её можно только отразить зеркально влево/вправо, а не крутить на произвольный угол: при повороте на
+// 90°/180° боковой силуэт визуально встаёт "на попа" или переворачивается вверх ногами, что для техники
+// на земле не имеет смысла. Поэтому раскладываем направление на восточную составляющую (sin) и просто
+// зеркалим через scaleX, без вращения: запад (sin<0) — картинка как есть (уже смотрит влево),
+// восток (sin>=0) — отражаем, чтобы смотрела вправо.
 function makeContractorIcon(directionDeg = 90) {
-  const W = 45, H = 45; // 2x от прежнего размера
+  const W = 45, H = 45; // -15% от 44px по вашей просьбе
   const anchorX = W * CONTRACTOR_ANCHOR_FRACTION.x;
   const anchorY = H * CONTRACTOR_ANCHOR_FRACTION.y;
   const rad = ((directionDeg ?? 90) * Math.PI) / 180;
-  const facingLeft = Math.sin(rad) < 0; // компас: 0=вверх,90=вправо,180=вниз,270=влево
-  const scaleX = facingLeft ? -1 : 1;
+  const needsMirrorToFaceRight = Math.sin(rad) >= 0;
+  const scaleX = needsMirrorToFaceRight ? -1 : 1;
   return L.divIcon({
     className: '',
     html: `<div style="width:${W}px;height:${H}px;transform:scaleX(${scaleX});transform-origin:${CONTRACTOR_ANCHOR_FRACTION.x * 100}% ${CONTRACTOR_ANCHOR_FRACTION.y * 100}%;">
@@ -202,7 +201,7 @@ function makeContractorIcon(directionDeg = 90) {
   });
 }
 
-// Мини-версия того же бульдозера (без катушки) — для кнопки-переключателя слоя в панели "СЛОИ"
+// Мини-версия того же бульдозера — для кнопки-переключателя слоя в панели "СЛОИ"
 const contractorButtonIconSvg = "<svg width=\"16\" height=\"14\" viewBox=\"60 25 80 62\" xmlns=\"http://www.w3.org/2000/svg\" style=\"vertical-align: -2px;\">\n  <!-- Земля -->\n  <line x1=\"60\" y1=\"85\" x2=\"140\" y2=\"85\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\"/>\n\n  <!-- Гусеницы -->\n  <rect x=\"70\" y=\"68\" width=\"65\" height=\"14\" rx=\"7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linejoin=\"round\"/>\n  <circle cx=\"78\" cy=\"75\" r=\"2\" fill=\"currentColor\" />\n  <circle cx=\"88\" cy=\"75\" r=\"2\" fill=\"currentColor\" />\n  <circle cx=\"98\" cy=\"75\" r=\"2\" fill=\"currentColor\" />\n  <circle cx=\"108\" cy=\"75\" r=\"2\" fill=\"currentColor\" />\n  <circle cx=\"118\" cy=\"75\" r=\"2\" fill=\"currentColor\" />\n\n  <!-- Рама под кабиной -->\n  <rect x=\"80\" y=\"61\" width=\"48\" height=\"8\" fill=\"currentColor\" opacity=\"0.5\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linejoin=\"round\" />\n\n  <!-- Кабина и корпус -->\n  <path d=\"M 80 61 L 128 61 L 128 42 C 128 32, 118 28, 102 28 L 96 28 L 96 42 L 80 42 Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linejoin=\"round\"/>\n  <path d=\"M 80 61 L 96 61 L 96 42 L 80 42 Z\" fill=\"currentColor\" opacity=\"0.3\" />\n\n  <!-- Окно -->\n  <path d=\"M 102 34 L 120 34 L 120 44 L 102 44 Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\"/>\n\n  <!-- Труба выхлопная -->\n  <rect x=\"85\" y=\"32\" width=\"6\" height=\"10\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\"/>\n  <line x1=\"88\" y1=\"32\" x2=\"88\" y2=\"26\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>\n\n  <!-- Крепление ковша -->\n  <line x1=\"62\" y1=\"71\" x2=\"80\" y2=\"71\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\"/>\n  <circle cx=\"72\" cy=\"54\" r=\"4\" fill=\"currentColor\" />\n\n  <!-- Большой ковш спереди -->\n  <path d=\"M 67 42 C 58 48, 58 68, 67 76\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"round\"/>\n</svg>";
 
 
@@ -370,9 +369,19 @@ export function VolsMapTab({ volsRouteData = [], musVolsData = [], codVolsData =
           : null;
         const bearing = manualBearing !== null ? manualBearing : (nearest ? nearest.bearing : 90);
 
+        // Техника — колонки с числом единиц; учитываем и с пробелом на конце заголовка, и без
+        const equipment = [
+          { label: 'Кабелеукладчик', count: toNumLoose(r["Кабелеукладчик"]) },
+          { label: 'Бульдозер', count: toNumLoose(r["Бульдозер"] ?? r["Бульдозер "]) },
+          { label: 'Трактор', count: toNumLoose(r["Трактор"] ?? r["Трактор "]) },
+          { label: 'Манипулятор', count: toNumLoose(r["Манипулятор"] ?? r["Манипулятор "]) },
+        ].filter(e => e.count !== null && e.count > 0); // строки с 0 или пустым — не показываем
+
         return {
           name: r["Подрядчик"] || '',
           section: r["Участок"] || '',
+          columnName: r["Наименование колонны"] || '',
+          equipment,
           lat: rawLat, lon: rawLon, bearing,
         };
       })
@@ -715,6 +724,27 @@ export function VolsMapTab({ volsRouteData = [], musVolsData = [], codVolsData =
               <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Участок</div>
               <div style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 600, lineHeight: 1.4 }}>{selectedContractor.section || '—'}</div>
             </div>
+
+            {selectedContractor.columnName && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 12 }}>
+                <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Наименование колонны</div>
+                <div style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 600, lineHeight: 1.4 }}>{selectedContractor.columnName}</div>
+              </div>
+            )}
+
+            {selectedContractor.equipment.length > 0 && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Техника</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {selectedContractor.equipment.map(e => (
+                    <div key={e.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                      <span style={{ color: '#94a3b8' }}>{e.label}</span>
+                      <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{e.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
