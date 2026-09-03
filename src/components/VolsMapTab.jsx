@@ -183,7 +183,7 @@ const CONTRACTOR_ANCHOR_FRACTION = { x: 105 / 180, y: 60 / 120 };
 // на земле не имеет смысла. Поэтому раскладываем направление на "смотрит влево или вправо"
 // по восточной составляющей (sin) и просто зеркалим через scaleX, без вращения.
 function makeContractorIcon(directionDeg = 90) {
-  const W = 72, H = 48; // 2x от прежнего размера
+  const W = 45, H = 45; // 2x от прежнего размера
   const anchorX = W * CONTRACTOR_ANCHOR_FRACTION.x;
   const anchorY = H * CONTRACTOR_ANCHOR_FRACTION.y;
   const rad = ((directionDeg ?? 90) * Math.PI) / 180;
