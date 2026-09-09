@@ -9,6 +9,33 @@ import { useDatasetView, filterRows } from '../hooks/useDatasetView';
 import { PushDropdown } from './PushDropdown';
 import { MetricTrendChart } from './MetricTrendChart';
 
+// Кастомный тултип для графика «Динамика выполнения плана» —
+// стиль в едином духе с HoverTooltip (карта): тёмный фон, скругления, тень.
+// Подписи «План»/«Факт» вместо английских dataKey (plan/fact).
+const TrendChartTooltip = ({ active, payload, label }) => {
+  if (!active || !payload || !payload.length) return null;
+  const seriesLabels = { plan: 'План', fact: 'Факт' };
+  const seriesColors = { plan: '#2898ff', fact: '#2de2a6' };
+  return (
+    <div style={{
+      background: '#0f1724',
+      color: '#e2e8f0',
+      padding: '8px 10px',
+      borderRadius: 8,
+      border: '1px solid rgba(255,255,255,0.08)',
+      boxShadow: '0 8px 24px rgba(2,6,23,0.6)',
+      fontSize: 12,
+    }}>
+      <div style={{ marginBottom: 4, color: '#9ca3af' }}>{label}</div>
+      {payload.map((entry) => (
+        <div key={entry.dataKey} style={{ color: seriesColors[entry.dataKey] || entry.color, fontWeight: 600 }}>
+          {seriesLabels[entry.dataKey] || entry.name}: {Number(entry.value).toLocaleString('ru-RU')}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 // Вкладка «СМР»: фильтры, KPI по объёмам, график динамики, спидометры по стоимости, графики план/факт по датам
 export const SmrTab = ({
   allData,
@@ -338,7 +365,7 @@ export const SmrTab = ({
             <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" vertical={false} />
             <XAxis dataKey="date" stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
             <YAxis hide domain={['auto', 'auto']} />
-            <Tooltip contentStyle={{ background: '#0f1b15', border: '1px solid #1d2d24', fontSize: 12 }} />
+            <Tooltip content={<TrendChartTooltip />} cursor={{ stroke: '#2d3748', strokeWidth: 1 }} />
 
             {/* Линия Плана — пунктиром, если факт 0, чтобы подчеркнуть ожидание */}
             <Line
