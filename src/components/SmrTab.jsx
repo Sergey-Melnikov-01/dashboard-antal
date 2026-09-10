@@ -31,8 +31,8 @@ const getEvenlySpacedTicks = (data, maxTicks = 5) => {
 // Подписи «План»/«Факт» вместо английских dataKey (plan/fact).
 const TrendChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload || !payload.length) return null;
-  const seriesLabels = { plan: 'План', fact: 'Факт' };
-  const seriesColors = { plan: '#2898ff', fact: '#2de2a6' };
+  const seriesLabels = { plan: 'План', fact: 'Факт Кабель', pipe: 'Факт Труба' };
+  const seriesColors = { plan: '#2898ff', fact: '#2de2a6', pipe: '#a78bfa' };
   return (
     <div style={{
       background: '#0f1724',
@@ -44,7 +44,7 @@ const TrendChartTooltip = ({ active, payload, label }) => {
       fontSize: 12,
     }}>
       <div style={{ marginBottom: 4, color: '#9ca3af' }}>{label}</div>
-      {payload.map((entry) => (
+      {payload.filter(entry => entry.value !== null && entry.value !== undefined).map((entry) => (
         <div key={entry.dataKey} style={{ color: seriesColors[entry.dataKey] || entry.color, fontWeight: 600 }}>
           {seriesLabels[entry.dataKey] || entry.name}: {Number(entry.value).toLocaleString('ru-RU')}
         </div>
@@ -90,11 +90,11 @@ export const SmrTab = ({
     date: activeDate,
   });
 
-  const { totalFact, totalPlan, deviation } = useMemo(() => {
-    const fact = filtered.reduce((s, r) => s + toNum(r["Факт км"]), 0);
+  const { totalFactCable, totalFactPipe, totalPlan } = useMemo(() => {
+    const cable = filtered.reduce((s, r) => s + toNum(r["Факт кабель км"]), 0);
+    const pipe = filtered.reduce((s, r) => s + toNum(r["Факт труба км"]), 0);
     const plan = filtered.reduce((s, r) => s + toNum(r["План км"]), 0);
-    const dev = fact - plan;
-    return { totalFact: fact, totalPlan: plan, deviation: dev };
+    return { totalFactCable: cable, totalFactPipe: pipe, totalPlan: plan };
   }, [filtered]);
 
   // «Выполнение» — теперь задаётся вручную в листе DB_SMR_PERCENT (Ветка, Дата отчета, Процент выполнения),
@@ -205,8 +205,16 @@ export const SmrTab = ({
     return { days, color, status };
   }, [datesData, selectedBranch, selectedSection, selectedContractor, activeDate]);
 
+  // Даты для графиков динамики, обрезанные по выбранному фильтру «Дата»: если выбрана
+  // конкретная дата отчёта, график заканчивается на ней, а не тянется до самого свежего отчёта
+  const visibleDates = useMemo(() => {
+    if (!activeDate) return dates;
+    const ad = parseDate(activeDate);
+    return dates.filter(d => parseDate(d) <= ad);
+  }, [dates, activeDate]);
+
   const trendData = useMemo(() => {
-    return dates.map(date => {
+    return visibleDates.map(date => {
       const rows = allData.filter(r => {
         if (!r) return false;
         if (r["Дата отчета"] !== date) return false;
@@ -215,11 +223,12 @@ export const SmrTab = ({
         if (selectedSection !== 'Все' && r["Участок"] !== selectedSection) return false;
         return true;
       });
-      const f = rows.reduce((s, r) => s + toNum(r["Факт км"]), 0);
+      const f = rows.reduce((s, r) => s + toNum(r["Факт кабель км"]), 0);
+      const t = rows.reduce((s, r) => s + toNum(r["Факт труба км"]), 0);
       const p = rows.reduce((s, r) => s + toNum(r["План км"]), 0);
-      return { date, plan: +p.toFixed(1), fact: +f.toFixed(1), pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 };
+      return { date, plan: +p.toFixed(1), fact: +f.toFixed(1), pipe: t > 0 ? +t.toFixed(1) : null, pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 };
     });
-  }, [dates, allData, selectedBranch, selectedContractor, selectedSection]);
+  }, [visibleDates, allData, selectedBranch, selectedContractor, selectedSection]);
 
   // Равномерно прореженные метки дат для оси X графика «Динамика выполнения плана» (не более 6 шт.)
   const trendTicks = useMemo(() => getEvenlySpacedTicks(trendData, 6), [trendData]);
@@ -233,7 +242,7 @@ export const SmrTab = ({
   const smrChartDataByCategory = useMemo(() => {
     const result = {};
     Object.entries(smrChartConfig).forEach(([catName, { planField, factField }]) => {
-      result[catName] = dates.map(date => {
+      result[catName] = visibleDates.map(date => {
         const rows = filterRows(allData, {
           date,
           branch: selectedBranch,
@@ -246,12 +255,12 @@ export const SmrTab = ({
       }).filter(row => row.plan !== 0 || row.fact !== 0);
     });
     return result;
-  }, [dates, allData, selectedBranch, selectedContractor, selectedSection]);
+  }, [visibleDates, allData, selectedBranch, selectedContractor, selectedSection]);
 
   const contractorStats = useMemo(() => {
     return contractors.map(c => {
       const rows = filtered.filter(r => r["Подрядчик"] === c);
-      const f = rows.reduce((s, r) => s + toNum(r["Факт км"]), 0);
+      const f = rows.reduce((s, r) => s + toNum(r["Факт кабель км"]), 0);
       const p = rows.reduce((s, r) => s + toNum(r["План км"]), 0);
       return { name: c, fact: f, plan: p, pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 };
     }).filter(c => c.fact > 0 || c.plan > 0);
@@ -328,11 +337,17 @@ export const SmrTab = ({
       </div>
 
       {/* KPI Row 1 — Объёмы */}
-      <div className="kpi-grid-smr" style={{ display: 'grid', gridTemplateColumns: `repeat(${delayKpi ? 5 : 4}, 1fr)`, gap: '16px', marginBottom: '16px' }}>
+      {(() => {
+        // Карточка «Факт труба км» появилась только с отчёта от 09.09.2026 — для более ранних
+        // дат это поле всегда 0, поэтому карточку показываем, только если есть реальные данные
+        const showPipeKpi = totalFactPipe > 0;
+        const kpiCount = 3 + (showPipeKpi ? 1 : 0) + (delayKpi ? 1 : 0);
+        return (
+      <div className="kpi-grid-smr" style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiCount}, 1fr)`, gap: '16px', marginBottom: '16px' }}>
       {[
         { label: 'План общий', val: totalPlan.toFixed(1), unit: 'км', color: '#2898ff' },
-        { label: 'Факт общий', val: totalFact.toFixed(1), unit: 'км', color: '#2de2a6' },
-        { label: 'Отклонение', val: (deviation > 0 ? '+' : '') + deviation.toFixed(1), unit: 'км', color: deviation >= 0 ? '#2de2a6' : '#ff4d4d' },
+        { label: 'Факт кабель', val: totalFactCable.toFixed(1), unit: 'км', color: '#2de2a6' },
+        ...(showPipeKpi ? [{ label: 'Факт труба', val: totalFactPipe.toFixed(1), unit: 'км', color: '#a78bfa' }] : []),
         {
           label: 'Выполнение',
           val: smrPercent === null ? '—' : smrPercent.toFixed(1),
@@ -348,7 +363,7 @@ export const SmrTab = ({
         </div>
       ))}
 
-      {/* 5-я карточка — Отставание (только если есть данные и нет фильтра по участку/подрядчику) */}
+      {/* Последняя карточка — Отставание (только если есть данные и нет фильтра по участку/подрядчику) */}
       {delayKpi && (
         <div style={card}>
           <div style={lbl}>Отставание</div>
@@ -362,6 +377,8 @@ export const SmrTab = ({
         </div>
       )}
     </div>
+        );
+      })()}
 
       {/* Charts row */}
       <div className="charts-row-smr" style={{
@@ -403,13 +420,24 @@ export const SmrTab = ({
               dot={{ r: 4, fill: '#1c1d26', stroke: '#2898ff', strokeWidth: 2 }}
             />
 
-            {/* Линия Факта — с точками на каждой дате */}
+            {/* Линия Факта (кабель) — с точками на каждой дате */}
             <Line
               type="monotone"
               dataKey="fact"
               stroke="#2de2a6"
               strokeWidth={3}
               dot={{ r: 4, fill: '#2de2a6' }}
+              activeDot={{ r: 6 }}
+            />
+
+            {/* Линия Труба — новая метрика (введена с отчёта от 09.09.2026). Для более ранних дат
+                значение null (данных ещё нет), поэтому линия/точки там не рисуются вовсе */}
+            <Line
+              type="monotone"
+              dataKey="pipe"
+              stroke="#a78bfa"
+              strokeWidth={2}
+              dot={{ r: 4, fill: '#1c1d26', stroke: '#a78bfa', strokeWidth: 2 }}
               activeDot={{ r: 6 }}
             />
           </LineChart>
@@ -506,7 +534,7 @@ export const SmrTab = ({
         <div style={lbl}>Выработка по участкам (км)</div>
         {(() => {
           const visibleSections = filtered.filter(r =>
-            (toNum(r["План км"]) || 0) > 0 || (toNum(r["Факт км"]) || 0) > 0
+            (toNum(r["План км"]) || 0) > 0 || (toNum(r["Факт кабель км"]) || 0) > 0
           );
           const dynamicHeight = Math.min(500, Math.max(150, visibleSections.length * 55));
           return (
@@ -546,12 +574,12 @@ export const SmrTab = ({
                       />
                   </Bar>
                   <Bar
-                    dataKey="Факт км"
+                    dataKey="Факт кабель км"
                     fill="#2de2a6"
                     barSize={visibleSections.length < 5 ? 28 : 12}
                     radius={[0, 4, 4, 0]}
                   >
-                    <LabelList dataKey="Факт км" position="right" style={{ fill: '#2de2a6', fontSize: 11, fontWeight: 'bold' }}
+                    <LabelList dataKey="Факт кабель км" position="right" style={{ fill: '#2de2a6', fontSize: 11, fontWeight: 'bold' }}
                     formatter={(v) => (v > 0 ? Number(v).toFixed(1) : '')}
                     />
                   </Bar>
