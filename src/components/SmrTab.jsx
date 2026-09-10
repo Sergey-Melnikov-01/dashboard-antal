@@ -9,6 +9,23 @@ import { useDatasetView, filterRows } from '../hooks/useDatasetView';
 import { PushDropdown } from './PushDropdown';
 import { MetricTrendChart } from './MetricTrendChart';
 
+// Возвращает не более `maxTicks` значений даты для оси X: всегда первая и последняя точка данных,
+// а между ними — равномерно распределённые по индексам массива (не по календарным дням).
+// Автоматически подстраивается под любое количество точек — при появлении новых отчётов
+// метки сами пересчитываются и "растягиваются" по всему диапазону.
+const getEvenlySpacedTicks = (data, maxTicks = 5) => {
+  if (!data || data.length === 0) return [];
+  if (data.length <= maxTicks) return data.map((d) => d.date);
+
+  const lastIndex = data.length - 1;
+  const ticks = [];
+  for (let i = 0; i < maxTicks; i++) {
+    const idx = Math.round((i * lastIndex) / (maxTicks - 1));
+    ticks.push(data[idx].date);
+  }
+  return [...new Set(ticks)];
+};
+
 // Кастомный тултип для графика «Динамика выполнения плана» —
 // стиль в едином духе с HoverTooltip (карта): тёмный фон, скругления, тень.
 // Подписи «План»/«Факт» вместо английских dataKey (plan/fact).
@@ -204,6 +221,9 @@ export const SmrTab = ({
     });
   }, [dates, allData, selectedBranch, selectedContractor, selectedSection]);
 
+  // Равномерно прореженные метки дат для оси X графика «Динамика выполнения плана» (не более 6 шт.)
+  const trendTicks = useMemo(() => getEvenlySpacedTicks(trendData, 6), [trendData]);
+
   // Динамика по датам для карточек-спидометров СМР (Материалы по НЗС / Материалы / СМР), в тенге
   const smrChartConfig = {
     'Материалы по НЗС': { planField: 'Материалы по НЗС [План]', factField: 'Материалы по НЗС [Факт]' },
@@ -363,7 +383,14 @@ export const SmrTab = ({
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" vertical={false} />
-            <XAxis dataKey="date" stroke="#4b5563" fontSize={10} tick={{ fill: '#9ca3af' }} />
+            <XAxis
+              dataKey="date"
+              stroke="#4b5563"
+              fontSize={10}
+              tick={{ fill: '#9ca3af' }}
+              ticks={trendTicks}
+              interval="preserveStartEnd"
+            />
             <YAxis hide domain={['auto', 'auto']} />
             <Tooltip content={<TrendChartTooltip />} cursor={{ stroke: '#2d3748', strokeWidth: 1 }} />
 
