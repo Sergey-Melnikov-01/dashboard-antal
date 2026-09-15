@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Polyline, CircleMarker, Marker, Tooltip as Lea
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { parseUsSheet } from '../data/usStages';
+import { buildTmcFactByParticipok } from '../utils/tmcFact';
 
 // ---------------------------------------------
 // Стили, согласованные с общим тёмным оформлением дашборда
@@ -245,7 +246,7 @@ const MapClickCatcher = ({ onEmptyClick }) => {
   return null;
 };
 
-export function VolsMapTab({ volsRouteData = [], musVolsData = [], codVolsData = [], contractorsData = [], usGreenData = [], usBlueData = [], usRedData = [] }) {
+export function VolsMapTab({ volsRouteData = [], musVolsData = [], codVolsData = [], contractorsData = [], usGreenData = [], usBlueData = [], usRedData = [], tmcFactData = [] }) {
   const [visibleBranches, setVisibleBranches] = useState(new Set(BRANCHES));
   const [showMus, setShowMus] = useState(true);
   const [showCod, setShowCod] = useState(true);
@@ -253,6 +254,12 @@ export function VolsMapTab({ volsRouteData = [], musVolsData = [], codVolsData =
   const [selectedSegment, setSelectedSegment] = useState(null);
   const [selectedMus, setSelectedMus] = useState(null);
   const [selectedContractor, setSelectedContractor] = useState(null);
+  const [openTmcGroups, setOpenTmcGroups] = useState({});
+
+  // Фактически имеющиеся материалы по участку (DB_TMC_FACT), сгруппированные Склад(НЗС)/Закуп —
+  // см. src/utils/tmcFact.js
+  const tmcByParticipok = useMemo(() => buildTmcFactByParticipok(tmcFactData), [tmcFactData]);
+  const toggleTmcGroup = (key) => setOpenTmcGroups((prev) => ({ ...prev, [key]: !prev[key] }));
 
   // % готовности каждого МУС — берём из того же чек-листа (DB_US_GREEN/BLUE/RED), что и кнопка "МУС",
   // чтобы цифры на карте и на вкладке "МУС" совпадали 1-в-1. Ключ — точное имя объекта (например 'УС "Уральск"').
@@ -664,6 +671,53 @@ export function VolsMapTab({ volsRouteData = [], musVolsData = [], codVolsData =
                 <span style={{ color: '#94a3b8' }}>Подрядчик</span>
                 <span style={{ color: '#e2e8f0', fontWeight: 600, textAlign: 'right' }}>{selectedSegment.contractor || '—'}</span>
               </div>
+
+              {(() => {
+                const tmc = tmcByParticipok.get(selectedSegment.name);
+                if (!tmc) return null;
+                return (
+                  <>
+                    <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+                    <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Материалы на участке
+                    </div>
+                    {tmc.groups.map((group) => {
+                      const isOpen = !!openTmcGroups[group.groupKey];
+                      return (
+                        <div key={group.groupKey}>
+                          <button
+                            onClick={() => toggleTmcGroup(group.groupKey)}
+                            style={{
+                              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                              width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+                              padding: '4px 0', color: '#cbd5e1', fontSize: 12.5, fontWeight: 700,
+                            }}
+                          >
+                            <span>{group.groupLabel} ({group.items.length})</span>
+                            <span style={{ color: '#6b7280', fontSize: 11 }}>{isOpen ? '▲' : '▼'}</span>
+                          </button>
+                          {isOpen && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '2px 0 6px' }}>
+                              {group.items.map((item) => (
+                                <div
+                                  key={item.short}
+                                  title={item.full}
+                                  style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 12.5 }}
+                                >
+                                  <span style={{ color: '#94a3b8', cursor: 'help' }}>{item.short}</span>
+                                  <span style={{ color: '#e2e8f0', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                    {item.qty.toLocaleString('ru-RU')} {item.unit}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}

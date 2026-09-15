@@ -15,6 +15,7 @@ export function useDashboardData() {
   const [usRedData, setUsRedData] = useState([]);     // DB_US_RED — вкладка "УС", красная ветка
   const [tmcData, setTmcData] = useState([]);
   const [tmcDvaData, setTmcDvaData] = useState([]);
+  const [tmcFactData, setTmcFactData] = useState([]); // DB_TMC_FACT — фактически имеющиеся материалы по участку (карта)
   const [datesData, setDatesData] = useState([]); // DB_DATES — отклонение сроков
   const [smrPercentData, setSmrPercentData] = useState([]); // DB_SMR_PERCENT — ручной % выполнения по веткам
   const [volsRouteData, setVolsRouteData] = useState([]); // DB_VOLS_ROUTE — сегменты трассы ВОЛС для карты
@@ -61,6 +62,9 @@ export function useDashboardData() {
       console.log('Ключ TMCdva:', tmcDvaKey, '| Данные:', tmcDvaKey ? raw[tmcDvaKey]?.length : 0);
       setTmcDvaData(tmcDvaKey && Array.isArray(raw[tmcDvaKey]) ? raw[tmcDvaKey] : []);
 
+      // DB_TMC_FACT — фактически имеющиеся материалы по участку (для карты)
+      setTmcFactData(Array.isArray(raw?.DB_TMC_FACT) ? raw.DB_TMC_FACT : []);
+
       // DB_DATES — отклонение сроков
       setDatesData(Array.isArray(raw?.DB_DATES) ? raw.DB_DATES : []);
 
@@ -89,5 +93,5 @@ export function useDashboardData() {
     });
   }, []);
 
-  return { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, contractorsData, usHistoryData, loading };
+  return { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, tmcFactData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, contractorsData, usHistoryData, loading };
 }
