@@ -9,23 +9,6 @@ import { useDatasetView, filterRows } from '../hooks/useDatasetView';
 import { PushDropdown } from './PushDropdown';
 import { MetricTrendChart } from './MetricTrendChart';
 
-// Возвращает не более `maxTicks` значений даты для оси X: всегда первая и последняя точка данных,
-// а между ними — равномерно распределённые по индексам массива (не по календарным дням).
-// Автоматически подстраивается под любое количество точек — при появлении новых отчётов
-// метки сами пересчитываются и "растягиваются" по всему диапазону.
-const getEvenlySpacedTicks = (data, maxTicks = 5) => {
-  if (!data || data.length === 0) return [];
-  if (data.length <= maxTicks) return data.map((d) => d.date);
-
-  const lastIndex = data.length - 1;
-  const ticks = [];
-  for (let i = 0; i < maxTicks; i++) {
-    const idx = Math.round((i * lastIndex) / (maxTicks - 1));
-    ticks.push(data[idx].date);
-  }
-  return [...new Set(ticks)];
-};
-
 // Кастомный тултип для графика «Динамика выполнения плана» —
 // стиль в едином духе с HoverTooltip (карта): тёмный фон, скругления, тень.
 // Подписи «План»/«Факт» вместо английских dataKey (plan/fact).
@@ -230,8 +213,13 @@ export const SmrTab = ({
     return dates.filter(d => parseDate(d) <= ad);
   }, [dates, activeDate]);
 
+  // График «Динамика выполнения плана» начинается с этой даты — более ранние (плоские/пустые)
+  // точки истории не нужны на графике, хотя в остальных местах (visibleDates) продолжают участвовать
+  const TREND_CHART_START_DATE = '11.06.2026';
+
   const trendData = useMemo(() => {
-    return visibleDates.map(date => {
+    const trendDates = visibleDates.filter(d => parseDate(d) >= parseDate(TREND_CHART_START_DATE));
+    return trendDates.map(date => {
       const rows = allData.filter(r => {
         if (!r) return false;
         if (r["Дата отчета"] !== date) return false;
@@ -246,9 +234,6 @@ export const SmrTab = ({
       return { date, plan: +p.toFixed(1), fact: +f.toFixed(1), pipe: t > 0 ? +t.toFixed(1) : null, pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 };
     });
   }, [visibleDates, allData, selectedBranch, selectedContractor, selectedSection]);
-
-  // Равномерно прореженные метки дат для оси X графика «Динамика выполнения плана» (не более 6 шт.)
-  const trendTicks = useMemo(() => getEvenlySpacedTicks(trendData, 6), [trendData]);
 
   // Динамика по датам для карточек-спидометров СМР (Материалы по НЗС / Материалы / СМР), в тенге
   const smrChartConfig = {
@@ -420,10 +405,8 @@ export const SmrTab = ({
             <XAxis
               dataKey="date"
               stroke="#4b5563"
-              fontSize={10}
-              tick={{ fill: '#9ca3af' }}
-              ticks={trendTicks}
-              interval="preserveStartEnd"
+              tick={false}
+              tickLine={false}
             />
             <YAxis hide domain={['auto', 'auto']} />
             <Tooltip content={<TrendChartTooltip />} cursor={{ stroke: '#2d3748', strokeWidth: 1 }} />
