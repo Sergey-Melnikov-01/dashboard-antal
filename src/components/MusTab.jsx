@@ -98,7 +98,7 @@ export const MusTab = ({ musData, musColors }) => {
             })}
           </div>
           {manualPct.total != null && (
-            <div style={{ fontSize: 30, fontWeight: 900, color: '#2de2a6', flexShrink: 0 }}>{manualPct.total.toFixed(1)}%</div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: '#2de2a6', flexShrink: 0 }}>{manualPct.total.toFixed(1)}%</div>
           )}
         </div>
       </div>
