@@ -53,9 +53,9 @@ export const MusTab = ({ musData, musColors }) => {
           <div style={{ fontSize: 14, fontWeight: 800, color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '1.2px' }}>
             Готовность ИРД МУС
           </div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#2de2a6' }}>
-            {fullyDoneCount} <span style={{ color: '#94a3b8', fontWeight: 600 }}>из {total}</span>
-          </div>
+          {manualPct.total != null && (
+            <div style={{ fontSize: 24, fontWeight: 900, color: '#2de2a6' }}>{manualPct.total.toFixed(1)}%</div>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 3, flex: 1, minWidth: 0 }}>
@@ -97,9 +97,9 @@ export const MusTab = ({ musData, musColors }) => {
               );
             })}
           </div>
-          {manualPct.total != null && (
-            <div style={{ fontSize: 24, fontWeight: 900, color: '#2de2a6', flexShrink: 0 }}>{manualPct.total.toFixed(1)}%</div>
-          )}
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#2de2a6', flexShrink: 0 }}>
+            {fullyDoneCount} <span style={{ color: '#94a3b8', fontWeight: 600 }}>из {total}</span>
+          </div>
         </div>
       </div>
 
