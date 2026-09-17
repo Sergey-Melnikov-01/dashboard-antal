@@ -4,7 +4,7 @@ import { MUS_STAGE_NAMES } from '../data/musStages';
 import { MusStageProgressBar } from './MusStageProgressBar';
 
 // Карточка одной ветки МУС: "X из Y готовы" + "X из Y согласовано" + разворачиваемая сводка по 14 этапам
-export const MusBranchCard = ({ branchKey, branchLabel, color, objects }) => {
+export const MusBranchCard = ({ branchKey, branchLabel, color, objects, manualPct }) => {
   const [expanded, setExpanded] = useState(false);
 
   const total = objects.length;
@@ -37,10 +37,13 @@ export const MusBranchCard = ({ branchKey, branchLabel, color, objects }) => {
         <div style={{ fontSize: 12, color: '#94a3b8' }}>{expanded ? '▲ свернуть' : '▼ развернуть'}</div>
       </div>
 
-      <div style={{ marginTop: 14, marginBottom: expanded ? 14 : 0 }}>
+      <div style={{ marginTop: 14, marginBottom: expanded ? 14 : 0, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 30, fontWeight: 900, color }}>
           {fullyDoneCount} <span style={{ fontSize: 16, color: '#94a3b8', fontWeight: 600 }}>из {total} МУС</span>
         </div>
+        {manualPct != null && (
+          <div style={{ fontSize: 30, fontWeight: 900, color }}>{manualPct.toFixed(1)}%</div>
+        )}
       </div>
 
       {expanded && (

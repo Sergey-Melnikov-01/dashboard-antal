@@ -8,6 +8,26 @@ import { HoverTooltip } from './HoverTooltip';
 export const MusTab = ({ musData, musColors }) => {
   const objects = useMemo(() => parseMusSheet(musData, musColors), [musData, musColors]);
 
+  // Готовые проценты по веткам/общий — из строк-сводки внизу DB_PIR_MUS (колонка A: метка, колонка B: доля 0..1),
+  // по тому же принципу, что и manualPct в PirTab.jsx
+  const manualPct = useMemo(() => {
+    const result = { total: null, green: null, blue: null, red: null };
+    if (!Array.isArray(musData)) return result;
+    musData.forEach(row => {
+      if (!row) return;
+      const cells = Array.isArray(row) ? row : Object.values(row);
+      const label = String(cells[0] || '').toLowerCase().trim();
+      if (!label) return;
+      const val = parseFloat(cells[1]);
+      if (isNaN(val) || val === 0) return;
+      if (label.includes('общ')) result.total = val * 100;
+      else if (label.includes('зелен')) result.green = val * 100;
+      else if (label.includes('син') || label.includes('голуб')) result.blue = val * 100;
+      else if (label.includes('красн')) result.red = val * 100;
+    });
+    return result;
+  }, [musData]);
+
   const total = objects.length;
   const fullyDoneCount = objects.filter(o => o.fullyDone).length;
 
@@ -37,44 +57,49 @@ export const MusTab = ({ musData, musColors }) => {
             {fullyDoneCount} <span style={{ color: '#94a3b8', fontWeight: 600 }}>из {total}</span>
           </div>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 3 }}>
-          {objects.map(obj => {
-            const branchColor = MUS_BRANCH_META[obj.branch]?.color || '#94a3b8';
-            const fillPct = (obj.doneCount / obj.totalStages) * 100;
-            return (
-              <div key={obj.id} style={{ flex: '1 1 0', minWidth: 0, maxWidth: 16, height: 16 }}>
-                <HoverTooltip
-                  tooltipWidth={220}
-                  content={
-                    <>
-                      <div style={{ fontWeight: 700, marginBottom: 3 }}>{obj.name}</div>
-                      <div style={{ color: '#94a3b8' }}>{MUS_BRANCH_META[obj.branch]?.label || ''}</div>
-                      <div style={{ color: branchColor, fontWeight: 700, marginTop: 3 }}>{obj.doneCount}/{obj.totalStages} этапов</div>
-                    </>
-                  }
-                >
-                  <div
-                    style={{
-                      position: 'relative',
-                      width: '100%',
-                      height: '100%',
-                      borderRadius: 3,
-                      border: `1.5px solid ${obj.doneCount > 0 ? branchColor : 'rgba(255,255,255,0.15)'}`,
-                      overflow: 'hidden',
-                    }}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 3, flex: 1, minWidth: 0 }}>
+            {objects.map(obj => {
+              const branchColor = MUS_BRANCH_META[obj.branch]?.color || '#94a3b8';
+              const fillPct = (obj.doneCount / obj.totalStages) * 100;
+              return (
+                <div key={obj.id} style={{ flex: '1 1 0', minWidth: 0, maxWidth: 16, height: 16 }}>
+                  <HoverTooltip
+                    tooltipWidth={220}
+                    content={
+                      <>
+                        <div style={{ fontWeight: 700, marginBottom: 3 }}>{obj.name}</div>
+                        <div style={{ color: '#94a3b8' }}>{MUS_BRANCH_META[obj.branch]?.label || ''}</div>
+                        <div style={{ color: branchColor, fontWeight: 700, marginTop: 3 }}>{obj.doneCount}/{obj.totalStages} этапов</div>
+                      </>
+                    }
                   >
-                    {/* Заливка пропорционально числу выполненных этапов (X из 14), без видимых делений */}
-                    <div style={{
-                      position: 'absolute', left: 0, top: 0, bottom: 0,
-                      width: `${fillPct}%`,
-                      background: branchColor,
-                      transition: 'width 0.3s ease',
-                    }} />
-                  </div>
-                </HoverTooltip>
-              </div>
-            );
-          })}
+                    <div
+                      style={{
+                        position: 'relative',
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: 3,
+                        border: `1.5px solid ${obj.doneCount > 0 ? branchColor : 'rgba(255,255,255,0.15)'}`,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {/* Заливка пропорционально числу выполненных этапов (X из 14), без видимых делений */}
+                      <div style={{
+                        position: 'absolute', left: 0, top: 0, bottom: 0,
+                        width: `${fillPct}%`,
+                        background: branchColor,
+                        transition: 'width 0.3s ease',
+                      }} />
+                    </div>
+                  </HoverTooltip>
+                </div>
+              );
+            })}
+          </div>
+          {manualPct.total != null && (
+            <div style={{ fontSize: 30, fontWeight: 900, color: '#2de2a6', flexShrink: 0 }}>{manualPct.total.toFixed(1)}%</div>
+          )}
         </div>
       </div>
 
@@ -87,6 +112,7 @@ export const MusTab = ({ musData, musColors }) => {
             branchLabel={MUS_BRANCH_META[bk].label}
             color={MUS_BRANCH_META[bk].color}
             objects={grouped[bk]}
+            manualPct={manualPct[bk]}
           />
         ))}
       </div>
