@@ -97,12 +97,13 @@ export const SmrTab = ({
     return { totalFactCable: cable, totalFactPipe: pipe, totalPlan: plan };
   }, [filtered]);
 
-  // «Выполнение» — теперь задаётся вручную в листе DB_SMR_PERCENT (Ветка, Дата отчета, Процент выполнения),
-  // а не считается из факт/план. Если для ветки нет значения — карточка показывает «—».
-  // При ВЕТКА = «Все» — средневзвешенное по веткам (вес = План км ветки за активную дату).
+  // «Выполнение» — три режима:
+  //  1) Выбран конкретный УЧАСТОК — берём его собственный "% вып." прямо из DB_SMR (колонка H),
+  //     а не ручное значение по ветке. Это фактический процент именно по этому участку.
+  //  2) Выбрана конкретная ВЕТКА (участок = «Все») — ручное значение из листа DB_SMR_PERCENT.
+  //  3) ВЕТКА = «Все» — средневзвешенное по веткам DB_SMR_PERCENT (вес = План км ветки за активную дату).
+  // Если данных нет — карточка показывает «—».
   const smrPercent = useMemo(() => {
-    if (!Array.isArray(smrPercentData) || !smrPercentData.length) return null;
-
     const parseAnyDate = s => {
       if (!s) return new Date(0);
       const str = String(s);
@@ -111,6 +112,22 @@ export const SmrTab = ({
       return new Date(y, m - 1, d);
     };
     const ad = activeDate ? parseDate(activeDate) : null;
+
+    // Режим 1: конкретный участок — фактический "% вып." из DB_SMR за последнюю (не позже activeDate) дату
+    if (selectedSection !== 'Все') {
+      let rows = allData.filter(r => r["Участок"] === selectedSection);
+      if (ad) {
+        rows = rows.filter(r => parseAnyDate(r["Дата отчета"]) <= ad);
+      }
+      if (!rows.length) return null;
+      const latest = rows.reduce((a, b) =>
+        parseAnyDate(a["Дата отчета"]) >= parseAnyDate(b["Дата отчета"]) ? a : b
+      );
+      const raw = toNum(latest["% вып."]);
+      return raw || raw === 0 ? raw * 100 : null;
+    }
+
+    if (!Array.isArray(smrPercentData) || !smrPercentData.length) return null;
 
     // Последнее (по дате отчёта, не позже activeDate) ручное значение % для конкретной ветки
     const getBranchPercent = (branchName) => {
@@ -146,7 +163,7 @@ export const SmrTab = ({
     });
 
     return weightTotal > 0 ? weightedSum / weightTotal : null;
-  }, [smrPercentData, selectedBranch, activeDate, branches, allData]);
+  }, [smrPercentData, selectedBranch, selectedSection, activeDate, branches, allData]);
 
   // Стоимости: Материалы и СМР
   const { matPlan, matFact, matDev, smrPlan, smrFact, smrDev, nzsPlan, nzsFact} = useMemo(() => {
