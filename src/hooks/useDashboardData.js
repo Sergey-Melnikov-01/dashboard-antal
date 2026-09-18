@@ -1,97 +1,128 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const API_URL = "https://script.google.com/macros/s/AKfycbw6XLjGzrrzg4knwf9QQ62zgv5jnKxvzZnZKhLUTSFX14b2dqa_iJZn2y5GjzPBgkH3/exec";
+const FETCH_TIMEOUT_MS = 20000; // если Apps Script не ответил за 20 сек — считаем это сбоем, а не вечной загрузкой
 
-// Загрузка всех данных дашборда с Google Apps Script (раз в маунт компонента)
+// Загрузка всех данных дашборда с Google Apps Script.
+// Теперь бэкенд сам кэширует ответ и сбрасывает кэш при правке таблицы,
+// поэтому здесь можно спокойно ходить в GET без принудительного
+// no-store — за актуальность отвечает сервер.
 export function useDashboardData() {
   const [allData, setAllData] = useState([]);
   const [metricsData, setMetricsData] = useState([]);
-  const [pirData, setPirData] = useState([]); // <-- added state for DB_PIR
+  const [pirData, setPirData] = useState([]);
   const [pirVolsData, setPirVolsData] = useState([]);
-  const [musData, setMusData] = useState([]); // DB_PIR_MUS — трекер МУС
-  const [musColors, setMusColors] = useState([]); // цвет заливки колонки "Наименование МУС" по строкам (для деления на ветки)
-  const [usGreenData, setUsGreenData] = useState([]); // DB_US_GREEN — вкладка "УС", зелёная ветка
-  const [usBlueData, setUsBlueData] = useState([]);   // DB_US_BLUE — вкладка "УС", синяя ветка
-  const [usRedData, setUsRedData] = useState([]);     // DB_US_RED — вкладка "УС", красная ветка
+  const [musData, setMusData] = useState([]);
+  const [musColors, setMusColors] = useState([]);
+  const [usGreenData, setUsGreenData] = useState([]);
+  const [usBlueData, setUsBlueData] = useState([]);
+  const [usRedData, setUsRedData] = useState([]);
   const [tmcData, setTmcData] = useState([]);
   const [tmcDvaData, setTmcDvaData] = useState([]);
-  const [tmcFactData, setTmcFactData] = useState([]); // DB_TMC_FACT — фактически имеющиеся материалы по участку (карта)
-  const [datesData, setDatesData] = useState([]); // DB_DATES — отклонение сроков
-  const [smrPercentData, setSmrPercentData] = useState([]); // DB_SMR_PERCENT — ручной % выполнения по веткам
-  const [volsRouteData, setVolsRouteData] = useState([]); // DB_VOLS_ROUTE — сегменты трассы ВОЛС для карты
-  const [musVolsData, setMusVolsData] = useState([]); // DB_MUS_VOLS — координаты МУС для карты
-  const [codVolsData, setCodVolsData] = useState([]); // DB_COD_VOLS — координаты ЦОД для карты (отдельно от МУС)
-  const [usHistoryData, setUsHistoryData] = useState([]); // DB_US_HISTORY — еженедельные снимки % готовности МУС для графика динамики
-  const [contractorsData, setContractorsData] = useState([]); // DB_CONTRACTORS_VOLS — кабелеукладчики/подрядчики на трассе
+  const [tmcFactData, setTmcFactData] = useState([]);
+  const [datesData, setDatesData] = useState([]);
+  const [smrPercentData, setSmrPercentData] = useState([]);
+  const [volsRouteData, setVolsRouteData] = useState([]);
+  const [musVolsData, setMusVolsData] = useState([]);
+  const [codVolsData, setCodVolsData] = useState([]);
+  const [usHistoryData, setUsHistoryData] = useState([]);
+  const [contractorsData, setContractorsData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null); // null = ок, строка = сообщение для UI
 
-  useEffect(() => {
-    // cache-busting: без этого браузер/Google иногда отдают закэшированный ответ
-    // даже после правки таблицы — свежие данные не подтягиваются без перезагрузки через время
-    fetch(`${API_URL}?t=${Date.now()}`, { cache: 'no-store' })
-      .then(res => res.json())
-      .then(rawData => {
-      const raw = rawData || {};
+  // чтобы отличать "старый" fetch (истекший по таймауту) от актуального,
+  // если пользователь быстро нажал "Обновить" несколько раз подряд
+  const requestIdRef = useRef(0);
 
-      // СМР
-      setAllData(Array.isArray(raw?.DB_SMR) ? raw.DB_SMR : []);
+  const applyData = (raw) => {
+    setAllData(Array.isArray(raw?.DB_SMR) ? raw.DB_SMR : []);
 
-      // Метрики (если есть)
-      if (Array.isArray(raw?.DB_METRIC)) {
-        setMetricsData(raw.DB_METRIC);
-      } else if (Array.isArray(raw?.DB_PIR)) {
-        // fallback if needed
-        setMetricsData(raw.DB_PIR);
-      } else {
-        setMetricsData([]);
-      }
+    if (Array.isArray(raw?.DB_METRIC)) {
+      setMetricsData(raw.DB_METRIC);
+    } else if (Array.isArray(raw?.DB_PIR)) {
+      setMetricsData(raw.DB_PIR);
+    } else {
+      setMetricsData([]);
+    }
 
-      // PIR data (if present in payload)
-      setPirData(Array.isArray(raw?.DB_PIR) ? raw.DB_PIR : []);
-      setPirVolsData(Array.isArray(raw?.DB_PIR_VOLS) ? raw.DB_PIR_VOLS : []);
-      setMusData(Array.isArray(raw?.DB_PIR_MUS) ? raw.DB_PIR_MUS : []);
-      setMusColors(Array.isArray(raw?.DB_PIR_MUS_COLORS) ? raw.DB_PIR_MUS_COLORS : []);
-      setUsGreenData(Array.isArray(raw?.DB_US_GREEN) ? raw.DB_US_GREEN : []);
-      setUsBlueData(Array.isArray(raw?.DB_US_BLUE) ? raw.DB_US_BLUE : []);
-      setUsRedData(Array.isArray(raw?.DB_US_RED) ? raw.DB_US_RED : []);
+    setPirData(Array.isArray(raw?.DB_PIR) ? raw.DB_PIR : []);
+    setPirVolsData(Array.isArray(raw?.DB_PIR_VOLS) ? raw.DB_PIR_VOLS : []);
+    setMusData(Array.isArray(raw?.DB_PIR_MUS) ? raw.DB_PIR_MUS : []);
+    setMusColors(Array.isArray(raw?.DB_PIR_MUS_COLORS) ? raw.DB_PIR_MUS_COLORS : []);
+    setUsGreenData(Array.isArray(raw?.DB_US_GREEN) ? raw.DB_US_GREEN : []);
+    setUsBlueData(Array.isArray(raw?.DB_US_BLUE) ? raw.DB_US_BLUE : []);
+    setUsRedData(Array.isArray(raw?.DB_US_RED) ? raw.DB_US_RED : []);
 
-      // ТМЦ
-      console.log('Все ключи API:', Object.keys(raw));
-      setTmcData(Array.isArray(raw?.DB_TMC) ? raw.DB_TMC : []);
-      const tmcDvaKey = Object.keys(raw).find(k => k.toUpperCase().includes('TMCDVA') || k.toUpperCase().includes('TMC2') || k.toUpperCase() === 'DB_TMCDVA');
-      console.log('Ключ TMCdva:', tmcDvaKey, '| Данные:', tmcDvaKey ? raw[tmcDvaKey]?.length : 0);
-      setTmcDvaData(tmcDvaKey && Array.isArray(raw[tmcDvaKey]) ? raw[tmcDvaKey] : []);
+    setTmcData(Array.isArray(raw?.DB_TMC) ? raw.DB_TMC : []);
+    const tmcDvaKey = Object.keys(raw).find(k => k.toUpperCase().includes('TMCDVA') || k.toUpperCase().includes('TMC2') || k.toUpperCase() === 'DB_TMCDVA');
+    setTmcDvaData(tmcDvaKey && Array.isArray(raw[tmcDvaKey]) ? raw[tmcDvaKey] : []);
 
-      // DB_TMC_FACT — фактически имеющиеся материалы по участку (для карты)
-      setTmcFactData(Array.isArray(raw?.DB_TMC_FACT) ? raw.DB_TMC_FACT : []);
+    setTmcFactData(Array.isArray(raw?.DB_TMC_FACT) ? raw.DB_TMC_FACT : []);
+    setDatesData(Array.isArray(raw?.DB_DATES) ? raw.DB_DATES : []);
+    setSmrPercentData(Array.isArray(raw?.DB_SMR_PERCENT) ? raw.DB_SMR_PERCENT : []);
+    setVolsRouteData(Array.isArray(raw?.DB_VOLS_ROUTE) ? raw.DB_VOLS_ROUTE : []);
+    setMusVolsData(Array.isArray(raw?.DB_MUS_VOLS) ? raw.DB_MUS_VOLS : []);
+    setCodVolsData(Array.isArray(raw?.DB_COD_VOLS) ? raw.DB_COD_VOLS : []);
+    setUsHistoryData(Array.isArray(raw?.DB_US_HISTORY) ? raw.DB_US_HISTORY : []);
+    setContractorsData(Array.isArray(raw?.DB_CONTRACTORS_VOLS) ? raw.DB_CONTRACTORS_VOLS : []);
+  };
 
-      // DB_DATES — отклонение сроков
-      setDatesData(Array.isArray(raw?.DB_DATES) ? raw.DB_DATES : []);
+  const fetchOnce = (forceRefresh) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const url = forceRefresh ? `${API_URL}?refresh=1` : API_URL;
 
-      // DB_SMR_PERCENT — ручной % выполнения по веткам (история отчётов)
-      setSmrPercentData(Array.isArray(raw?.DB_SMR_PERCENT) ? raw.DB_SMR_PERCENT : []);
+    return fetch(url, { signal: controller.signal })
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .finally(() => clearTimeout(timeoutId));
+  };
 
-      // DB_VOLS_ROUTE — сегменты трассы ВОЛС (координаты точек А/Б, статус, % для карты)
-      setVolsRouteData(Array.isArray(raw?.DB_VOLS_ROUTE) ? raw.DB_VOLS_ROUTE : []);
+  // forceRefresh=true — дёргает ?refresh=1, минуя серверный кэш
+  // (для кнопки "Обновить данные")
+  const load = useCallback((forceRefresh = false) => {
+    const myRequestId = ++requestIdRef.current;
+    setLoading(true);
+    setError(null);
 
-      // DB_MUS_VOLS — координаты и метаданные МУС для карты
-      setMusVolsData(Array.isArray(raw?.DB_MUS_VOLS) ? raw.DB_MUS_VOLS : []);
-
-      // DB_COD_VOLS — координаты ЦОД для карты (отдельный слой, не МУС)
-      setCodVolsData(Array.isArray(raw?.DB_COD_VOLS) ? raw.DB_COD_VOLS : []);
-
-      // DB_US_HISTORY — еженедельные снимки % готовности МУС (для графика динамики на вкладке "МУС")
-      setUsHistoryData(Array.isArray(raw?.DB_US_HISTORY) ? raw.DB_US_HISTORY : []);
-
-      // DB_CONTRACTORS_VOLS — кабелеукладчики/подрядчики, активные на трассе
-      setContractorsData(Array.isArray(raw?.DB_CONTRACTORS_VOLS) ? raw.DB_CONTRACTORS_VOLS : []);
-
-      setLoading(false);
-    }).catch(err => {
-      console.error('API load error', err);
-      setLoading(false);
-    });
+    fetchOnce(forceRefresh)
+      .catch((firstErr) => {
+        // один автоматический повтор — часто это просто холодный старт
+        // Apps Script, вторая попытка обычно проходит быстро
+        console.warn('Первая попытка загрузки не удалась, повтор...', firstErr);
+        return fetchOnce(forceRefresh);
+      })
+      .then((raw) => {
+        if (myRequestId !== requestIdRef.current) return; // пришёл ответ на устаревший запрос
+        applyData(raw || {});
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (myRequestId !== requestIdRef.current) return;
+        console.error('API load error', err);
+        const message = err?.name === 'AbortError'
+          ? 'Сервер долго не отвечает. Проверьте соединение и попробуйте ещё раз.'
+          : 'Не удалось загрузить данные дашборда. Попробуйте обновить.';
+        setError(message);
+        setLoading(false);
+      });
   }, []);
 
-  return { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, tmcFactData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, contractorsData, usHistoryData, loading };
+  useEffect(() => {
+    load(false);
+  }, [load]);
+
+  // refetch(true) — для кнопки "Обновить данные" (принудительно, мимо кэша)
+  // refetch() — обычный повтор (использует кэш на сервере, если он есть)
+  const refetch = useCallback((forceRefresh = false) => load(forceRefresh), [load]);
+
+  return {
+    allData, metricsData, pirData, pirVolsData, musData, musColors,
+    usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, tmcFactData,
+    datesData, smrPercentData, volsRouteData, musVolsData, codVolsData,
+    contractorsData, usHistoryData,
+    loading, error, refetch,
+  };
 }

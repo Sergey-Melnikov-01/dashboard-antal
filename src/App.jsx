@@ -21,7 +21,7 @@ const lbl = { color: '#94a3b8', fontSize: '11px', marginBottom: '6px', textTrans
 
 // ProgressBar — компонент для трекера этапов ПИР
 export default function App() {
-  const { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, tmcFactData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, contractorsData, usHistoryData, loading } = useDashboardData();
+  const { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, tmcFactData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, contractorsData, usHistoryData, loading, error, refetch } = useDashboardData();
   const [activeTab, setActiveTab] = useState('construction'); // 'construction' | 'schedule' (metrics)
   const [animatingTab, setAnimatingTab] = useState(null);
 
@@ -239,6 +239,18 @@ export default function App() {
     return { done, inProgress, notStarted };
   }, [pirFiltered]);
 
+
+  if (error) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1c1d26', color: 'white', fontFamily: 'sans-serif', gap: '16px', textAlign: 'center', padding: '20px' }}>
+      <div>{error}</div>
+      <button
+        onClick={() => refetch(true)}
+        style={{ background: '#2de2a6', color: '#1c1d26', border: 'none', borderRadius: '10px', padding: '10px 20px', fontWeight: 'bold', cursor: 'pointer' }}
+      >
+        Обновить данные
+      </button>
+    </div>
+  );
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1c1d26', color: 'white', fontFamily: 'sans-serif' }}>
