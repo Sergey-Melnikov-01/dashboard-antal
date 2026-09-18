@@ -58,15 +58,13 @@ export const MusTab = ({ musData, musColors }) => {
 
   return (
     <>
-      {/* Общая шкала готовности */}
-      <div style={{ ...card, marginBottom: 20 }}>
+      {/* Общая шкала готовности + отдельная карточка с процентом рядом */}
+      <div style={{ display: 'flex', gap: 20, alignItems: 'stretch', marginBottom: 20 }}>
+        <div style={{ ...card, flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '1.2px' }}>
             Готовность ИРД МУС
           </div>
-          {manualPct.total != null && (
-            <div style={{ fontSize: 24, fontWeight: 900, color: '#2de2a6' }}>{manualPct.total.toFixed(1)}%</div>
-          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 3, flex: 1, minWidth: 0 }}>
@@ -112,6 +110,20 @@ export const MusTab = ({ musData, musColors }) => {
             {fullyDoneCount} <span style={{ color: '#94a3b8', fontWeight: 600 }}>из {total}</span>
           </div>
         </div>
+        </div>
+
+        {manualPct.total != null && (
+          <div style={{
+            ...card,
+            flexShrink: 0,
+            width: 140,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <span style={{ fontSize: 30, fontWeight: 900, color: '#2de2a6' }}>{manualPct.total.toFixed(1)}%</span>
+          </div>
+        )}
       </div>
 
       {/* Карточки веток */}
