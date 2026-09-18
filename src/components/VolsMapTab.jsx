@@ -307,7 +307,8 @@ export function VolsMapTab({ volsRouteData = [], musVolsData = [], codVolsData =
           status: r["Статус"] || '',
           pct: toNum(r["Процент_выполнения"]),
           planKm: r["План_км"] ?? '',
-          factKm: r["Факт_км"] ?? '',
+          cableFactKm: r["Кабель_факт_км"] ?? '',
+          pipeFactKm: r["Труба_факт_км"] ?? '',
           contractor: r["Подрядчик"] ?? r["Подрядчик "] ?? '',
           positions,
         };
@@ -652,10 +653,39 @@ export function VolsMapTab({ volsRouteData = [], musVolsData = [], codVolsData =
                 <span style={{ color: '#94a3b8' }}>План, км</span>
                 <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{selectedSegment.planKm || '—'}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: '#94a3b8' }}>Факт, км</span>
-                <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{selectedSegment.factKm || '—'}</span>
-              </div>
+              {(() => {
+                // Показываем только то, что реально есть на участке: кабель, трубу,
+                // или оба сразу (если на участке проложены и кабель, и труба).
+                // Пустое значение или 0 считаем "нет данных" и строку не выводим.
+                const hasCable = selectedSegment.cableFactKm !== '' && selectedSegment.cableFactKm !== null && Number(selectedSegment.cableFactKm) !== 0;
+                const hasPipe = selectedSegment.pipeFactKm !== '' && selectedSegment.pipeFactKm !== null && Number(selectedSegment.pipeFactKm) !== 0;
+
+                if (!hasCable && !hasPipe) {
+                  return (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                      <span style={{ color: '#94a3b8' }}>Факт, км</span>
+                      <span style={{ color: '#e2e8f0', fontWeight: 600 }}>—</span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <>
+                    {hasCable && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                        <span style={{ color: '#94a3b8' }}>Кабель факт, км</span>
+                        <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{selectedSegment.cableFactKm}</span>
+                      </div>
+                    )}
+                    {hasPipe && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                        <span style={{ color: '#94a3b8' }}>Труба факт, км</span>
+                        <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{selectedSegment.pipeFactKm}</span>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                 <span style={{ color: '#94a3b8' }}>Процент выполнения</span>
                 <span style={{ color: branchColor(selectedSegment.branch), fontWeight: 700 }}>
