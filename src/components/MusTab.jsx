@@ -1,12 +1,23 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { card } from '../styles/theme';
 import { parseMusSheet, MUS_BRANCH_META } from '../data/musStages';
 import { MusBranchCard } from './MusBranchCard';
 import { HoverTooltip } from './HoverTooltip';
 
+// Даты этапов приходят из таблицы в виде ISO-строки ("2026-08-20T07:00:00.000Z") —
+// показываем их в привычном виде ДД.ММ.ГГГГ; если строка не парсится как дата,
+// просто возвращаем её как есть, чтобы ничего не потерять.
+const formatStageDate = (raw) => {
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  return d.toLocaleDateString('ru-RU');
+};
+
 // Вкладка «МУС»: общая шкала готовности + 3 карточки веток (зелёная/синяя/красная)
 export const MusTab = ({ musData, musColors }) => {
   const objects = useMemo(() => parseMusSheet(musData, musColors), [musData, musColors]);
+  const [selectedObj, setSelectedObj] = useState(null); // объект МУС, для которого открыта детальная карточка по этапам
 
   // Готовые проценты по веткам/общий — из строк-сводки внизу DB_PIR_MUS (колонка A: метка, колонка B: доля 0..1),
   // по тому же принципу, что и manualPct в PirTab.jsx
@@ -63,7 +74,7 @@ export const MusTab = ({ musData, musColors }) => {
               const branchColor = MUS_BRANCH_META[obj.branch]?.color || '#94a3b8';
               const fillPct = (obj.doneCount / obj.totalStages) * 100;
               return (
-                <div key={obj.id} style={{ flex: '1 1 0', minWidth: 0, maxWidth: 16, height: 16 }}>
+                <div key={obj.id} onClick={() => setSelectedObj(obj)} style={{ flex: '1 1 0', minWidth: 0, maxWidth: 16, height: 16, cursor: 'pointer' }}>
                   <HoverTooltip
                     tooltipWidth={220}
                     content={
@@ -116,6 +127,83 @@ export const MusTab = ({ musData, musColors }) => {
           />
         ))}
       </div>
+
+      {/* Детальная карточка по этапам — открывается по клику на квадрат */}
+      {selectedObj && (
+        <div
+          onClick={() => setSelectedObj(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, padding: 20,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#161722', border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 16, padding: 22, width: '100%', maxWidth: 480,
+              maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#e2e8f0', lineHeight: 1.3 }}>{selectedObj.name}</div>
+              <button
+                onClick={() => setSelectedObj(null)}
+                style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: 0 }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ fontSize: 12, color: MUS_BRANCH_META[selectedObj.branch]?.color, fontWeight: 700, marginBottom: 4 }}>
+              {MUS_BRANCH_META[selectedObj.branch]?.label}
+            </div>
+
+            {(selectedObj.region || selectedObj.district) && (
+              <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 12 }}>
+                {[selectedObj.region, selectedObj.district].filter(Boolean).join(', ')}
+              </div>
+            )}
+
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', fontSize: 13,
+              marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.08)',
+            }}>
+              <span style={{ color: '#94a3b8' }}>Выполнено этапов</span>
+              <span style={{ color: MUS_BRANCH_META[selectedObj.branch]?.color, fontWeight: 800 }}>
+                {selectedObj.doneCount} из {selectedObj.totalStages}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {selectedObj.stages.map((s, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 12.5 }}>
+                  <div style={{
+                    flexShrink: 0, width: 18, height: 18, borderRadius: '50%', marginTop: 1,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: s.done ? MUS_BRANCH_META[selectedObj.branch]?.color : 'rgba(255,255,255,0.08)',
+                    color: s.done ? '#0b0c10' : '#6b7280',
+                    fontSize: 11, fontWeight: 800,
+                  }}>
+                    {s.done ? '✓' : i + 1}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: s.done ? '#e2e8f0' : '#94a3b8' }}>{s.name}</div>
+                    <div style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>
+                      {s.factDate
+                        ? <>Факт: <span style={{ color: '#2de2a6' }}>{formatStageDate(s.factDate)}</span></>
+                        : s.planDate
+                          ? <>План: {formatStageDate(s.planDate)}</>
+                          : 'Дата не указана'}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
