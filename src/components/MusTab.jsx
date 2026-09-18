@@ -116,12 +116,12 @@ export const MusTab = ({ musData, musColors }) => {
           <div style={{
             ...card,
             flexShrink: 0,
-            width: 100,
+            width: 90,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            <span style={{ fontSize: 28, fontWeight: 900, color: '#2de2a6' }}>{manualPct.total.toFixed(1)}%</span>
+            <span style={{ fontSize: 26, fontWeight: 900, color: '#2de2a6' }}>{manualPct.total.toFixed(1)}%</span>
           </div>
         )}
       </div>

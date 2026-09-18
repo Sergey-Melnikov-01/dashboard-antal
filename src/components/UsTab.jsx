@@ -1,8 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { card } from '../styles/theme';
 import { parseUsSheet, US_BRANCH_META } from '../data/usStages';
 import { CircularProgress } from './CircularProgress';
 import { UsBranchCard } from './UsBranchCard';
+
+// Сколько последних недель показываем на графике "Сравнение веток по неделям" по умолчанию —
+// остальное доступно через ползунок под графиком
+const BAR_CHART_WINDOW = 4;
 
 // --- Простые SVG-графики динамики (без внешних библиотек) ---
 
@@ -217,6 +221,25 @@ export const UsTab = ({ usGreenData, usBlueData, usRedData, usHistoryData }) => 
     return { labels, series };
   }, [usHistoryData]);
 
+  // Окно из последних BAR_CHART_WINDOW недель для графика "Сравнение веток по неделям".
+  // barWindowStart — индекс первой недели в текущем окне; по умолчанию окно смещено
+  // в самый конец (показывает последние недели), ползунок в начале своей шкалы (0) —
+  // и потянув его влево, можно посмотреть более ранние недели.
+  const totalWeeks = historyChart ? historyChart.labels.length : 0;
+  const maxBarWindowStart = Math.max(0, totalWeeks - BAR_CHART_WINDOW);
+  const [barWindowStart, setBarWindowStart] = useState(0);
+
+  useEffect(() => {
+    // при загрузке/обновлении данных сразу показываем последние недели
+    setBarWindowStart(maxBarWindowStart);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalWeeks]);
+
+  const barLabels = historyChart ? historyChart.labels.slice(barWindowStart, barWindowStart + BAR_CHART_WINDOW) : [];
+  const barSeries = historyChart
+    ? historyChart.series.map(s => ({ ...s, values: s.values.slice(barWindowStart, barWindowStart + BAR_CHART_WINDOW) }))
+    : [];
+
   if (total === 0) {
     return (
       <div style={{ ...card, alignItems: 'center', justifyContent: 'center', minHeight: 180, textAlign: 'center' }}>
@@ -268,8 +291,62 @@ export const UsTab = ({ usGreenData, usBlueData, usRedData, usHistoryData }) => 
             <div style={{ fontSize: 13, fontWeight: 800, color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 12 }}>
               Сравнение веток по неделям
             </div>
-            <HistoryBarChart labels={historyChart.labels} series={historyChart.series} />
-            <ChartLegend series={historyChart.series} />
+            <HistoryBarChart labels={barLabels} series={barSeries} />
+            <ChartLegend series={barSeries} />
+            {maxBarWindowStart > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <style>{`
+                  .us-history-range {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    width: 100%;
+                    height: 4px;
+                    border-radius: 999px;
+                    background: rgba(255,255,255,0.08);
+                    outline: none;
+                    cursor: pointer;
+                  }
+                  .us-history-range::-webkit-slider-thumb {
+                    -webkit-appearance: none;
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 50%;
+                    background: #cbd5e1;
+                    border: 2px solid #14151f;
+                    box-shadow: 0 0 0 1px rgba(255,255,255,0.12);
+                    cursor: pointer;
+                  }
+                  .us-history-range::-moz-range-thumb {
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 50%;
+                    background: #cbd5e1;
+                    border: 2px solid #14151f;
+                    box-shadow: 0 0 0 1px rgba(255,255,255,0.12);
+                    cursor: pointer;
+                  }
+                  .us-history-range::-moz-range-track {
+                    height: 4px;
+                    border-radius: 999px;
+                    background: rgba(255,255,255,0.08);
+                  }
+                `}</style>
+                <input
+                  type="range"
+                  className="us-history-range"
+                  min={0}
+                  max={maxBarWindowStart}
+                  value={barWindowStart}
+                  onChange={(e) => setBarWindowStart(Number(e.target.value))}
+                  style={{ width: '100%' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                  <span>← более ранние недели</span>
+                  <span>{barLabels[0]} – {barLabels[barLabels.length - 1]}</span>
+                  <span>последние недели →</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
