@@ -13,6 +13,7 @@ import { MetricTrendChart } from './components/MetricTrendChart';
 import { SmrTab } from './components/SmrTab';
 import { UsTab } from './components/UsTab';
 import { VolsMapTab } from './components/VolsMapTab';
+import { ForecastTab } from './components/ForecastTab';
 
 const bg = '#1c1d26';
 const card = { background: '#21222d', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '18px', padding: '22px', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' };
@@ -21,7 +22,7 @@ const lbl = { color: '#94a3b8', fontSize: '11px', marginBottom: '6px', textTrans
 
 // ProgressBar — компонент для трекера этапов ПИР
 export default function App() {
-  const { allData, metricsData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, tmcFactData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, contractorsData, usHistoryData, loading, error, refetch } = useDashboardData();
+  const { allData, metricsData, kpiData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, tmcFactData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, contractorsData, usHistoryData, loading, error, refetch } = useDashboardData();
   const [activeTab, setActiveTab] = useState('construction'); // 'construction' | 'schedule' (metrics)
   const [animatingTab, setAnimatingTab] = useState(null);
 
@@ -47,14 +48,32 @@ export default function App() {
     { id: 'materials', label: '📦 ТМЦ' },
     { id: 'pir', label: '📋 ПИР/ПСД' },
     { id: 'us', label: '📡 МУС' },
-    { id: 'map', label: '🌍 Карта' }, 
+    { id: 'map', label: '🌍 Карта' },
   ];
+  // 'forecast' — скрытая вкладка, не показывается кнопкой в навигации.
+  // Открывается сочетанием клавиш: клавиша "s" (см. useEffect ниже).
 
   const handleTabClick = (id) => {
     setActiveTab(id);
     setAnimatingTab(id);
     setTimeout(() => setAnimatingTab(null), 700);
   };
+
+  // Скрытая вкладка "Прогноз": открывается клавишей "s", в навигации кнопки нет.
+  // Игнорируем нажатие, если фокус в поле ввода/текстовом поле, а также если
+  // зажат Ctrl/Cmd/Alt (чтобы не перехватывать системные сочетания клавиш).
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key !== 's' && e.key !== 'S') return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const tag = e.target?.tagName;
+      const isEditable = e.target?.isContentEditable;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || isEditable) return;
+      setActiveTab('forecast');
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
 
 
@@ -524,7 +543,11 @@ export default function App() {
         />
       )}
 
-      {activeTab !== 'construction' && activeTab !== 'schedule' && activeTab !== 'pir' && activeTab !== 'materials' && activeTab !== 'us' && activeTab !== 'map' && (
+      {activeTab === 'forecast' && (
+        <ForecastTab kpiData={kpiData} />
+      )}
+
+      {activeTab !== 'construction' && activeTab !== 'schedule' && activeTab !== 'pir' && activeTab !== 'materials' && activeTab !== 'us' && activeTab !== 'map' && activeTab !== 'forecast' && (
         <div style={{ ...card, alignItems: 'center', justifyContent: 'center', minHeight: '300px', textAlign: 'center' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#2de2a6', marginBottom: '8px' }}>В разработке</div>

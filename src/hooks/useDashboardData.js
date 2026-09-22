@@ -10,6 +10,7 @@ const FETCH_TIMEOUT_MS = 20000; // если Apps Script не ответил за
 export function useDashboardData() {
   const [allData, setAllData] = useState([]);
   const [metricsData, setMetricsData] = useState([]);
+  const [kpiData, setKpiData] = useState([]); // DB_KPI — сырой массив массивов (нестандартная раскладка: заголовок в 1-й строке, группировка по подрядчику прямо в теле листа)
   const [pirData, setPirData] = useState([]);
   const [pirVolsData, setPirVolsData] = useState([]);
   const [musData, setMusData] = useState([]);
@@ -46,6 +47,7 @@ export function useDashboardData() {
     }
 
     setPirData(Array.isArray(raw?.DB_PIR) ? raw.DB_PIR : []);
+    setKpiData(Array.isArray(raw?.DB_KPI) ? raw.DB_KPI : []); // сырой массив массивов, не sheetToJson
     setPirVolsData(Array.isArray(raw?.DB_PIR_VOLS) ? raw.DB_PIR_VOLS : []);
     setMusData(Array.isArray(raw?.DB_PIR_MUS) ? raw.DB_PIR_MUS : []);
     setMusColors(Array.isArray(raw?.DB_PIR_MUS_COLORS) ? raw.DB_PIR_MUS_COLORS : []);
@@ -119,7 +121,7 @@ export function useDashboardData() {
   const refetch = useCallback((forceRefresh = false) => load(forceRefresh), [load]);
 
   return {
-    allData, metricsData, pirData, pirVolsData, musData, musColors,
+    allData, metricsData, kpiData, pirData, pirVolsData, musData, musColors,
     usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, tmcFactData,
     datesData, smrPercentData, volsRouteData, musVolsData, codVolsData,
     contractorsData, usHistoryData,

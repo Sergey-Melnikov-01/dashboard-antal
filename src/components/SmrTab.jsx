@@ -430,16 +430,8 @@ export const SmrTab = ({
               activeDot={{ r: 6 }}
             />
 
-            {/* Линия Труба — новая метрика (введена с отчёта от 09.09.2026). Для более ранних дат
-                значение null (данных ещё нет), поэтому линия/точки там не рисуются вовсе */}
-            <Line
-              type="monotone"
-              dataKey="pipe"
-              stroke="#a78bfa"
-              strokeWidth={2}
-              dot={{ r: 4, fill: '#1c1d26', stroke: '#a78bfa', strokeWidth: 2 }}
-              activeDot={{ r: 6 }}
-            />
+            {/* Линия Труба убрана с графика по просьбе — портила читаемость
+                (см. showPipeKpi/totalFactPipe в KPI-карточках выше, там осталась) */}
           </LineChart>
         </ResponsiveContainer>
       </div>
