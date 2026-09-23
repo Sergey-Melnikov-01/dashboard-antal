@@ -6,14 +6,10 @@ import { toNum } from '../utils/format';
 import { card, lbl } from '../styles/theme';
 
 // ─── ВРЕМЕННЫЕ ФИКСИРОВАННЫЕ ЗНАЧЕНИЯ ──────────────────────────────────────
-// "Остаток трассы" задан вручную (Сергей передал готовые цифры). Всё
-// остальное (Факт, средняя выработка в неделю, прогноз окончания, график)
-// теперь считается автоматически из DB_KPI — при появлении новой колонки
-// (новой недели) в листе пересчитается само, ничего в коде трогать не надо.
-const REMAINING_PIPE = {
-  favorite: 1052.3,  // км — осталось сделать (труба), СК «Фаворит»
-  tekhno: 209.103,   // км — осталось сделать (труба), ТОО «Техностандарт-М»
-};
+// "Остаток трассы" больше не хардкодится — теперь это План (из столбца B
+// в строке-заголовке подрядчика в DB_KPI) минус Факт (сумма недель). Правишь
+// План прямо в таблице — остаток пересчитается сам, ничего в коде трогать
+// не надо.
 
 // Целевая дата, к которой нужно успеть закончить всю трассу — от неё считаем,
 // сколько нужно делать в неделю начиная с сегодняшнего дня
@@ -75,17 +71,17 @@ const ForecastTooltip = ({ active, payload, label, color }) => {
 };
 
 // Разбираем сырой DB_KPI (массив массивов, как отдаёт getDataRange().getValues()):
-// строка 0 — заголовок ("Название" + даты/диапазоны недель по столбцам);
-// далее — либо строка-заголовок подрядчика (только текст, без значений),
-// либо строка участка (числа по неделям, накопительно не считаем — это
-// именно недельные объёмы). Строки участков относим к последнему
-// встреченному заголовку подрядчика.
+// строка 0 — заголовок ("Название", "План", затем даты/диапазоны недель);
+// далее — либо строка-заголовок подрядчика (текст + План в столбце B, сами
+// недели пустые — оттуда же берём общий План на подрядчика), либо строка
+// участка (числа по неделям, накопительно не считаем — это именно недельные
+// объёмы). Строки участков относим к последнему встреченному заголовку.
 function parseKpi(kpiData) {
   const empty = { favorite: null, tekhno: null };
   if (!Array.isArray(kpiData) || kpiData.length < 2) return empty;
 
   const headerRow = kpiData[0] || [];
-  const weekHeaders = headerRow.slice(1);
+  const weekHeaders = headerRow.slice(2); // A — Название, B — План, дальше недели
   const weekCount = weekHeaders.length;
   if (weekCount === 0) return empty;
 
@@ -96,23 +92,25 @@ function parseKpi(kpiData) {
     favorite: new Array(weekCount).fill(0),
     tekhno: new Array(weekCount).fill(0),
   };
+  const plans = { favorite: null, tekhno: null };
 
   let currentKey = null;
   for (let r = 1; r < kpiData.length; r++) {
     const row = kpiData[r] || [];
     const label = String(row[0] || '').trim();
     if (!label) continue;
-    const values = row.slice(1, 1 + weekCount);
-    const isHeaderRow = values.every(v => v === '' || v === null || v === undefined);
+    const weekValues = row.slice(2, 2 + weekCount);
+    const isHeaderRow = weekValues.every(v => v === '' || v === null || v === undefined);
 
     if (isHeaderRow) {
       const matchedKey = Object.keys(CONTRACTOR_META).find(key => CONTRACTOR_META[key].match(label));
       currentKey = matchedKey || null; // строка вроде "Строительство магистрали ВОЛС" — сбрасываем контекст
+      if (matchedKey) plans[matchedKey] = toNum(row[1]); // План — из столбца B этой же строки
       continue;
     }
 
     if (!currentKey) continue; // строка данных встретилась раньше, чем узнали подрядчика — пропускаем
-    values.forEach((v, i) => { sums[currentKey][i] += toNum(v); });
+    weekValues.forEach((v, i) => { sums[currentKey][i] += toNum(v); });
   }
 
   const buildContractor = (key) => {
@@ -129,8 +127,10 @@ function parseKpi(kpiData) {
     const weeksElapsed = firstActiveIdx === -1 ? 0 : (weekCount - firstActiveIdx);
     const avgPipe = weeksElapsed > 0 ? factPipe / weeksElapsed : null;
     const lastWeekEndDate = weekEndDates[weekEndDates.length - 1];
+    const planPipe = plans[key]; // План из столбца B — 0/null, если ещё не заполнен в таблице
+    const remainingPipe = (planPipe !== null && planPipe > 0) ? Math.max(0, planPipe - factPipe) : null;
 
-    return { factPipe, avgPipe, chartTrend, lastWeekEndDate };
+    return { factPipe, avgPipe, chartTrend, lastWeekEndDate, planPipe, remainingPipe };
   };
 
   return { favorite: buildContractor('favorite'), tekhno: buildContractor('tekhno') };
@@ -146,10 +146,10 @@ export const ForecastTab = ({ kpiData }) => {
     return Object.keys(CONTRACTOR_META).map(key => {
       const meta = CONTRACTOR_META[key];
       const p = parsed[key];
-      const remainingPipe = REMAINING_PIPE[key];
+      const remainingPipe = p ? p.remainingPipe : null; // теперь План − Факт, живой из DB_KPI
 
       let forecastDays = null, forecastDateText = null, requiredPace = null;
-      if (p && p.avgPipe && p.avgPipe > 0 && p.lastWeekEndDate) {
+      if (p && p.avgPipe && p.avgPipe > 0 && p.lastWeekEndDate && remainingPipe !== null) {
         const weeksLeft = remainingPipe / p.avgPipe;
         const daysFromLastReport = Math.round(weeksLeft * 7);
         const forecastDate = new Date(p.lastWeekEndDate.getTime() + daysFromLastReport * MS_DAY);
