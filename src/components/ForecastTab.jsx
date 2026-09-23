@@ -15,6 +15,10 @@ const REMAINING_PIPE = {
   tekhno: 209.103,   // км — осталось сделать (труба), ТОО «Техностандарт-М»
 };
 
+// Целевая дата, к которой нужно успеть закончить всю трассу — от неё считаем,
+// сколько нужно делать в неделю начиная с сегодняшнего дня
+const TARGET_DATE = new Date(2026, 10, 15); // 15.11.2026 (месяцы в JS Date с 0)
+
 // Единый акцентный цвет для обеих карточек
 const ACCENT = '#2de2a6';
 
@@ -24,6 +28,7 @@ const CONTRACTOR_META = {
 };
 
 const MS_DAY = 24 * 60 * 60 * 1000;
+const MS_WEEK = 7 * MS_DAY;
 
 const fmt = (n, digits = 1) => (n === null || n === undefined || Number.isNaN(n))
   ? '—'
@@ -143,11 +148,22 @@ export const ForecastTab = ({ kpiData }) => {
       const p = parsed[key];
       const remainingPipe = REMAINING_PIPE[key];
 
-      let forecastDays = null, forecastDateText = null;
+      let forecastDays = null, forecastDateText = null, requiredPace = null;
       if (p && p.avgPipe && p.avgPipe > 0 && p.lastWeekEndDate) {
         const weeksLeft = remainingPipe / p.avgPipe;
-        forecastDays = Math.round(weeksLeft * 7);
-        forecastDateText = formatDateRu(new Date(p.lastWeekEndDate.getTime() + forecastDays * MS_DAY));
+        const daysFromLastReport = Math.round(weeksLeft * 7);
+        const forecastDate = new Date(p.lastWeekEndDate.getTime() + daysFromLastReport * MS_DAY);
+        forecastDateText = formatDateRu(forecastDate);
+
+        // "Осталось ~N дн." считаем от СЕГОДНЯ (а не от даты последнего отчёта) —
+        // иначе цифра дней не сходится с разницей "дата окончания − сегодня"
+        const todayMidnight = new Date();
+        todayMidnight.setHours(0, 0, 0, 0);
+        forecastDays = Math.max(0, Math.round((forecastDate.getTime() - todayMidnight.getTime()) / MS_DAY));
+
+        // Сколько нужно делать в неделю начиная с сегодня, чтобы успеть к TARGET_DATE
+        const weeksToTarget = (TARGET_DATE.getTime() - todayMidnight.getTime()) / MS_WEEK;
+        requiredPace = weeksToTarget > 0 ? remainingPipe / weeksToTarget : null;
       }
 
       return {
@@ -160,6 +176,7 @@ export const ForecastTab = ({ kpiData }) => {
         chartTrend: p ? p.chartTrend : [],
         forecastDays,
         forecastDateText,
+        requiredPace,
       };
     });
   }, [parsed]);
@@ -174,23 +191,13 @@ export const ForecastTab = ({ kpiData }) => {
               {c.title}
             </div>
 
-            {/* Факт */}
+            {/* Факт труба + Остаток трассы */}
             <div style={{ marginBottom: '14px' }}>
               <div style={lbl}>Факт труба</div>
               <div style={{ fontSize: '28px', fontWeight: 800, color: c.accent }}>
                 {fmt(c.factPipe)} <span style={{ fontSize: '14px', opacity: 0.6 }}>км</span>
               </div>
-            </div>
-
-            {/* Средняя выработка/неделю + Остаток трассы */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-              <div>
-                <div style={lbl}>Ср. выработка / нед.</div>
-                <div style={{ fontSize: '18px', fontWeight: 700, color: '#e2e8f0' }}>
-                  {fmt(c.avgPipe)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км/нед</span>
-                </div>
-              </div>
-              <div>
+              <div style={{ marginTop: '10px' }}>
                 <div style={lbl}>Остаток трассы</div>
                 <div style={{ fontSize: '18px', fontWeight: 700, color: '#ff9b45' }}>
                   {fmt(c.remainingPipe)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км</span>
@@ -198,14 +205,38 @@ export const ForecastTab = ({ kpiData }) => {
               </div>
             </div>
 
-            {/* Прогноз окончания */}
-            <div style={{ paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={lbl}>Прогноз окончания</div>
-              <div style={{ fontSize: '20px', fontWeight: 800, color: c.accent }}>
-                {c.forecastDateText || '—'}
+            {/* Ряд 1: текущая средняя выработка (слева) vs требуемая для цели (справа) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div>
+                <div style={lbl}>Ср. выработка / нед.</div>
+                <div style={{ fontSize: '18px', fontWeight: 700, color: '#e2e8f0' }}>
+                  {fmt(c.avgPipe)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км/нед</span>
+                </div>
               </div>
-              <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>
-                {c.forecastDays !== null ? `осталось ~${c.forecastDays} дн.` : ''}
+              <div style={{ borderLeft: '1px solid rgba(255,255,255,0.06)', paddingLeft: '12px' }}>
+                <div style={lbl}>Ср. выработка / нед. для цели</div>
+                <div style={{ fontSize: '18px', fontWeight: 800, color: '#a78bfa' }}>
+                  {fmt(c.requiredPace)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км/нед</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Ряд 2: прогноз окончания при текущем темпе (слева) vs целевая дата (справа) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div>
+                <div style={lbl}>Прогноз окончания</div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: c.accent }}>
+                  {c.forecastDateText || '—'}
+                </div>
+                <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>
+                  {c.forecastDays !== null ? `осталось ~${c.forecastDays} дн.` : ''}
+                </div>
+              </div>
+              <div style={{ borderLeft: '1px solid rgba(255,255,255,0.06)', paddingLeft: '12px' }}>
+                <div style={lbl}>Цель</div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: '#a78bfa' }}>
+                  15.11.2026
+                </div>
               </div>
             </div>
           </div>
