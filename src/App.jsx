@@ -64,7 +64,7 @@ export default function App() {
   // зажат Ctrl/Cmd/Alt (чтобы не перехватывать системные сочетания клавиш).
   useEffect(() => {
     const onKeyDown = (e) => {
-      if (e.key !== 's' && e.key !== 'S') return;
+      if (e.code !== 'KeyS') return; // физическая клавиша S — не зависит от раскладки (в отличие от e.key)
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const tag = e.target?.tagName;
       const isEditable = e.target?.isContentEditable;
@@ -282,29 +282,51 @@ export default function App() {
 
   return (
     <div className="app-wrapper" style={{ minHeight: '100vh', background: bg, color: '#e2e8f0', fontFamily: 'Inter, sans-serif' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: '800', margin: 0 }}>
-          DASHBOARD <span style={{ color: '#2de2a6' }}>ANTAL</span>
-        </h1>
-        <div style={{ color: '#94a3b8', fontSize: '12px', textAlign: 'right' }}>
-          ДАННЫЕ ОБНОВЛЕНЫ:<br />
-          <span style={{ color: 'white', fontWeight: 'bold' }}>{activeTab === 'schedule' ? (metricActiveDate || '—') : (activeDate || '—')}</span>
+      {/* Header — скрываем на секретной странице "Прогноз" */}
+      {activeTab !== 'forecast' && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+          <h1 style={{ fontSize: '22px', fontWeight: '800', margin: 0 }}>
+            DASHBOARD <span style={{ color: '#2de2a6' }}>ANTAL</span>
+          </h1>
+          <div style={{ color: '#94a3b8', fontSize: '12px', textAlign: 'right' }}>
+            ДАННЫЕ ОБНОВЛЕНЫ:<br />
+            <span style={{ color: 'white', fontWeight: 'bold' }}>{activeTab === 'schedule' ? (metricActiveDate || '—') : (activeDate || '—')}</span>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Tabs */}
-      <div className="tabs-container" style={{ marginBottom: '24px' }}>
-        {tabs.map((tab) => (
+      {/* Tabs — тоже скрыты на секретной странице; вместо них — крестик выхода */}
+      {activeTab !== 'forecast' ? (
+        <div className="tabs-container" style={{ marginBottom: '24px' }}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              className={`bubbly-button ${activeTab === tab.id ? 'active' : ''} ${animatingTab === tab.id ? 'animate' : ''}`}
+              onClick={() => handleTabClick(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
           <button
-            key={tab.id}
-            className={`bubbly-button ${activeTab === tab.id ? 'active' : ''} ${animatingTab === tab.id ? 'animate' : ''}`}
-            onClick={() => handleTabClick(tab.id)}
+            onClick={() => setActiveTab('construction')}
+            aria-label="Закрыть"
+            title="Закрыть"
+            style={{
+              width: '36px', height: '36px', borderRadius: '10px',
+              background: '#21222d', border: '1px solid rgba(255,255,255,0.08)',
+              color: '#94a3b8', fontSize: '18px', lineHeight: 1, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#e2e8f0'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
           >
-            {tab.label}
+            ✕
           </button>
-        ))}
-      </div>
+        </div>
+      )}
 
       {activeTab === 'construction' && (
         <SmrTab
