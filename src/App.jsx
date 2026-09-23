@@ -14,6 +14,7 @@ import { SmrTab } from './components/SmrTab';
 import { UsTab } from './components/UsTab';
 import { VolsMapTab } from './components/VolsMapTab';
 import { ForecastTab } from './components/ForecastTab';
+import antalLogo from './assets/antal-logo.png';
 
 const bg = '#1c1d26';
 const card = { background: '#21222d', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '18px', padding: '22px', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' };
@@ -272,7 +273,8 @@ export default function App() {
   );
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1c1d26', color: 'white', fontFamily: 'sans-serif' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '18px', height: '100vh', background: '#1c1d26', color: 'white', fontFamily: 'sans-serif' }}>
+      <img src={antalLogo} alt="Antal Group" style={{ height: '48px', width: 'auto' }} />
       Загрузка аналитики АНТАЛ...
     </div>
   );
@@ -285,13 +287,11 @@ export default function App() {
       {/* Header — скрываем на секретной странице "Прогноз" */}
       {activeTab !== 'forecast' && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-          <h1 style={{ fontSize: '22px', fontWeight: '800', margin: 0 }}>
-            DASHBOARD <span style={{ color: '#2de2a6' }}>ANTAL</span>
-          </h1>
-          <div style={{ color: '#94a3b8', fontSize: '12px', textAlign: 'right' }}>
+          <div style={{ color: '#94a3b8', fontSize: '12px' }}>
             ДАННЫЕ ОБНОВЛЕНЫ:<br />
             <span style={{ color: 'white', fontWeight: 'bold' }}>{activeTab === 'schedule' ? (metricActiveDate || '—') : (activeDate || '—')}</span>
           </div>
+          <img src={antalLogo} alt="Antal Group" style={{ height: '34px', width: 'auto' }} />
         </div>
       )}
 
