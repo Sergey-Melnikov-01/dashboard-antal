@@ -190,17 +190,48 @@ export default function App() {
     });
   }, [metricsDates, metricsData, selectedBranch, selectedContractor, selectedSection]);
 
-  // Данные для графика выбранной в фильтре "Графики" категории, в формате { date, plan, fact } — как у trendData на СМР
+  // Данные для графика выбранной в фильтре "Графики" категории, в формате { date, plan, fact }.
+  // weekly: true — график понедельный (дельта между отчётами), false — старый
+  // накопительный формат (как было изначально). chartStartDate — с какой даты
+  // рисуем график (более ранние точки отбрасываем), null — с самого начала истории.
   const metricChartConfig = {
-    'Кабель': { planKey: 'cablePlan', factKey: 'cableFact', unit: 'км' },
-    'Труба': { planKey: 'pipePlan', factKey: 'pipeFact', unit: 'км' },
-    'Засыпка': { planKey: 'backfillPlan', factKey: 'backfillFact', unit: 'км' },
-    'ГНБ': { planKey: 'hddPlan', factKey: 'hddFact', unit: 'м' },
+    'Кабель':  { planKey: 'cablePlan',    factKey: 'cableFact',    unit: 'км', weekly: true,  chartStartDate: '01.07.2026' },
+    'Труба':   { planKey: 'pipePlan',     factKey: 'pipeFact',     unit: 'км', weekly: true,  chartStartDate: '01.07.2026' },
+    'Засыпка': { planKey: 'backfillPlan', factKey: 'backfillFact', unit: 'км', weekly: true,  chartStartDate: '01.07.2026' },
+    'ГНБ':     { planKey: 'hddPlan',      factKey: 'hddFact',      unit: 'м',  weekly: true,  chartStartDate: '01.07.2026' },
   };
+  // metricsTrend хранит НАКОПИТЕЛЬНЫЕ значения (снимок "сколько сделано на
+  // дату отчёта"). Для категорий с weekly:true переводим в понедельную
+  // выработку — разница между соседними отчётами (тот же принцип, что и на
+  // вкладке "Прогноз" / DB_KPI); для самой первой даты в истории берём её
+  // накопленное значение как есть. Для weekly:false (ГНБ) оставляем как было
+  // изначально — сырые накопительные План/Факт, без пересчёта.
   const metricChartDataByCategory = useMemo(() => {
     const result = {};
     Object.entries(metricChartConfig).forEach(([catName, cfg]) => {
-      result[catName] = metricsTrend.map(row => ({ date: row.date, plan: row[cfg.planKey], fact: row[cfg.factKey] }));
+      let series;
+      if (cfg.weekly) {
+        let prevPlan = 0, prevFact = 0;
+        series = metricsTrend.map(row => {
+          const planCum = row[cfg.planKey];
+          const factCum = row[cfg.factKey];
+          const planWeek = +(planCum - prevPlan).toFixed(1);
+          const factWeek = +(factCum - prevFact).toFixed(1);
+          prevPlan = planCum;
+          prevFact = factCum;
+          return { date: row.date, plan: planWeek, fact: factWeek };
+        });
+      } else {
+        // Старый накопительный формат — как было изначально
+        series = metricsTrend.map(row => ({ date: row.date, plan: row[cfg.planKey], fact: row[cfg.factKey] }));
+      }
+
+      if (cfg.chartStartDate) {
+        const startMs = parseDate(cfg.chartStartDate);
+        series = series.filter(pt => parseDate(pt.date) >= startMs);
+      }
+
+      result[catName] = series;
     });
     return result;
   }, [metricsTrend]);
