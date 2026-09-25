@@ -235,7 +235,14 @@ export const SmrTab = ({
     });
   }, [visibleDates, allData, selectedBranch, selectedContractor, selectedSection]);
 
-  // Динамика по датам для карточек-спидометров СМР (Материалы по НЗС / Материалы / СМР), в тенге
+  // Динамика по датам для карточек-спидометров СМР (Материалы по НЗС / Материалы / СМР), в тенге.
+  // Данные по каждой дате изначально накопительные (снимок "сколько уже
+  // потрачено/сделано на дату отчёта"), поэтому переводим в понедельные
+  // значения — разница между соседними отчётами (тот же принцип, что и на
+  // вкладке "Прогноз" и на "Метрики"). График строим с фиксированной даты
+  // SMR_CHART_START_DATE — так же, как на вкладке "Метрики". "Динамика
+  // выполнения плана (км)" (trendData выше) этим не затронута — как была.
+  const SMR_CHART_START_DATE = '01.07.2026';
   const smrChartConfig = {
     'Материалы по НЗС': { planField: 'Материалы по НЗС [План]', factField: 'Материалы по НЗС [Факт]' },
     'Материалы': { planField: 'Материалы [План]', factField: 'Материалы [Факт]' },
@@ -243,18 +250,35 @@ export const SmrTab = ({
   };
   const smrChartDataByCategory = useMemo(() => {
     const result = {};
+    const startMs = parseDate(SMR_CHART_START_DATE);
     Object.entries(smrChartConfig).forEach(([catName, { planField, factField }]) => {
-      result[catName] = visibleDates.map(date => {
+      const cumulative = visibleDates.map(date => {
         const rows = filterRows(allData, {
           date,
           branch: selectedBranch,
           contractor: selectedContractor,
           section: selectedSection,
         });
-        const p = rows.reduce((s, r) => s + toNum(r[planField]), 0);
-        const f = rows.reduce((s, r) => s + toNum(r[factField]), 0);
-        return { date, plan: +p.toFixed(1), fact: +f.toFixed(1) };
-      }).filter(row => row.plan !== 0 || row.fact !== 0);
+        const planCum = rows.reduce((s, r) => s + toNum(r[planField]), 0);
+        const factCum = rows.reduce((s, r) => s + toNum(r[factField]), 0);
+        return { date, planCum, factCum };
+      });
+
+      // Точка отсчёта дельты — последний отчёт ДО стартовой даты (если такой
+      // есть), чтобы неделя, в которую попадает сама стартовая дата, тоже
+      // считалась корректно, а не как скачок от нуля
+      const startIdx = cumulative.findIndex(row => parseDate(row.date) >= startMs);
+      if (startIdx === -1) { result[catName] = []; return; }
+
+      let prevPlan = startIdx > 0 ? cumulative[startIdx - 1].planCum : 0;
+      let prevFact = startIdx > 0 ? cumulative[startIdx - 1].factCum : 0;
+      result[catName] = cumulative.slice(startIdx).map(row => {
+        const planWeek = +(row.planCum - prevPlan).toFixed(1);
+        const factWeek = +(row.factCum - prevFact).toFixed(1);
+        prevPlan = row.planCum;
+        prevFact = row.factCum;
+        return { date: row.date, plan: planWeek, fact: factWeek };
+      });
     });
     return result;
   }, [visibleDates, allData, selectedBranch, selectedContractor, selectedSection]);
