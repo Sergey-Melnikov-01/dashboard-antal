@@ -156,6 +156,13 @@ function parseKpi(kpiData) {
 export const ForecastTab = ({ kpiData }) => {
   const parsed = useMemo(() => parseKpi(kpiData), [kpiData]);
 
+  // «Осталось ~N дн.» до цели — от сегодняшней даты, так же как под прогнозом окончания
+  const targetDaysLeft = (() => {
+    const t = new Date();
+    t.setHours(0, 0, 0, 0);
+    return Math.max(0, Math.round((TARGET_DATE.getTime() - t.getTime()) / MS_DAY));
+  })();
+
   const perContractor = useMemo(() => {
     return Object.keys(CONTRACTOR_META).map(key => {
       const meta = CONTRACTOR_META[key];
@@ -253,6 +260,9 @@ export const ForecastTab = ({ kpiData }) => {
                 <div style={lbl}>Цель</div>
                 <div style={{ fontSize: '20px', fontWeight: 800, color: '#a78bfa' }}>
                   15.11.2026
+                </div>
+                <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>
+                  {`осталось ~${targetDaysLeft} дн.`}
                 </div>
               </div>
             </div>
