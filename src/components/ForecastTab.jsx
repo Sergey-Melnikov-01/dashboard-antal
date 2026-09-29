@@ -93,6 +93,12 @@ function parseKpi(kpiData) {
     tekhno: new Array(weekCount).fill(0),
   };
   const plans = { favorite: null, tekhno: null };
+  // Была ли в неделе хоть одна заполненная ячейка (0 считается записью, пустая — нет).
+  // Нужно, чтобы пустые колонки будущих недель не попадали в делитель средней.
+  const hasEntry = {
+    favorite: new Array(weekCount).fill(false),
+    tekhno: new Array(weekCount).fill(false),
+  };
 
   let currentKey = null;
   for (let r = 1; r < kpiData.length; r++) {
@@ -110,7 +116,10 @@ function parseKpi(kpiData) {
     }
 
     if (!currentKey) continue; // строка данных встретилась раньше, чем узнали подрядчика — пропускаем
-    weekValues.forEach((v, i) => { sums[currentKey][i] += toNum(v); });
+    weekValues.forEach((v, i) => {
+      sums[currentKey][i] += toNum(v);
+      if (v !== '' && v !== null && v !== undefined) hasEntry[currentKey][i] = true;
+    });
   }
 
   const buildContractor = (key) => {
@@ -122,11 +131,16 @@ function parseKpi(kpiData) {
     // линия должна идти то вверх, то вниз при просадках
     const weeklyTrend = weeklySums.map((v, i) => ({ date: weekLabels[i], pipeWeek: v }));
 
-    const chartTrend = firstActiveIdx === -1 ? weeklyTrend : weeklyTrend.slice(firstActiveIdx);
+    // Последняя неделя, где у подрядчика есть хоть одна запись (включая 0).
+    // Пустые колонки будущих недель (заголовок уже добавили, данных ещё нет)
+    // не должны разбавлять среднюю и сдвигать дату отсчёта прогноза.
+    const lastReportedIdx = hasEntry[key].lastIndexOf(true);
+
+    const chartTrend = firstActiveIdx === -1 ? weeklyTrend : weeklyTrend.slice(firstActiveIdx, lastReportedIdx + 1);
     const factPipe = weeklySums.reduce((sum, v) => sum + v, 0); // сумма всех недельных значений
-    const weeksElapsed = firstActiveIdx === -1 ? 0 : (weekCount - firstActiveIdx);
+    const weeksElapsed = firstActiveIdx === -1 ? 0 : (lastReportedIdx - firstActiveIdx + 1);
     const avgPipe = weeksElapsed > 0 ? factPipe / weeksElapsed : null;
-    const lastWeekEndDate = weekEndDates[weekEndDates.length - 1];
+    const lastWeekEndDate = lastReportedIdx >= 0 ? weekEndDates[lastReportedIdx] : null;
     const planPipe = plans[key]; // План из столбца B — 0/null, если ещё не заполнен в таблице
     const remainingPipe = (planPipe !== null && planPipe > 0) ? Math.max(0, planPipe - factPipe) : null;
 
@@ -161,8 +175,11 @@ export const ForecastTab = ({ kpiData }) => {
         todayMidnight.setHours(0, 0, 0, 0);
         forecastDays = Math.max(0, Math.round((forecastDate.getTime() - todayMidnight.getTime()) / MS_DAY));
 
-        // Сколько нужно делать в неделю начиная с сегодня, чтобы успеть к TARGET_DATE
-        const weeksToTarget = (TARGET_DATE.getTime() - todayMidnight.getTime()) / MS_WEEK;
+        // Сколько нужно делать в неделю, чтобы успеть к TARGET_DATE. Остаток известен
+        // на дату последнего отчёта, поэтому и время до цели считаем от неё (как и
+        // прогноз окончания). От сегодняшней даты число дрейфовало каждый день без
+        // новых данных, а «съеденные» дни с ещё не внесённой выработкой завышали темп.
+        const weeksToTarget = (TARGET_DATE.getTime() - p.lastWeekEndDate.getTime()) / MS_WEEK;
         requiredPace = weeksToTarget > 0 ? remainingPipe / weeksToTarget : null;
       }
 
