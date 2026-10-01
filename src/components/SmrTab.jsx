@@ -202,7 +202,27 @@ export const SmrTab = ({
     // Цвет: 0 — зелёный, 1–14 — жёлтый, 15+ — красный
     const color = days === 0 ? '#2de2a6' : days <= 14 ? '#ff9b45' : '#ff4d4d';
 
-    return { days, color, status };
+    // Текущая дата окончания (колонка D листа DB_DATES) → dd.mm.yyyy.
+    // Принимает 'dd.mm.yy', 'dd.mm.yyyy' и ISO-строки.
+    const formatEndDate = (v) => {
+      if (!v) return '—';
+      const str = String(v).trim();
+      let d;
+      if (str.includes('T')) {
+        d = new Date(str);
+      } else {
+        const [dd, mm, yy] = str.split('.');
+        if (!dd || !mm || !yy) return str;
+        const year = Number(yy) < 100 ? 2000 + Number(yy) : Number(yy);
+        d = new Date(year, Number(mm) - 1, Number(dd));
+      }
+      if (isNaN(d.getTime())) return str;
+      const pad = n => String(n).padStart(2, '0');
+      return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+    };
+    const endDate = formatEndDate(latest["Текущая дата окончания"]);
+
+    return { days, color, status, endDate };
   }, [datesData, selectedBranch, selectedSection, selectedContractor, activeDate]);
 
   // Даты для графиков динамики, обрезанные по выбранному фильтру «Дата»: если выбрана
@@ -389,8 +409,18 @@ export const SmrTab = ({
         </div>
       ))}
 
-      {/* Последняя карточка — Отставание (только если есть данные и нет фильтра по участку/подрядчику) */}
+      {/* Последняя карточка — Дата окончания (только если есть данные и нет фильтра по участку/подрядчику) */}
       {delayKpi && (
+        <div style={card}>
+          <div style={lbl}>Дата окончания</div>
+          <div style={{ fontSize: '28px', fontWeight: '800', color: delayKpi.color, whiteSpace: 'nowrap' }}>
+            {delayKpi.endDate}
+          </div>
+        </div>
+      )}
+
+      {/* Прежняя карточка «Отставание» — скрыта, не удалена */}
+      {false && delayKpi && (
         <div style={card}>
           <div style={lbl}>Отставание</div>
           <div style={{ fontSize: '28px', fontWeight: '800', color: delayKpi.color, whiteSpace: 'nowrap' }}>
