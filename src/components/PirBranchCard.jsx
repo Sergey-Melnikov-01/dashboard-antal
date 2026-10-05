@@ -1,29 +1,36 @@
 import { useState, useMemo } from 'react';
 import { CircularProgress } from './CircularProgress';
 import { StageProgressBar } from './StageProgressBar';
+import { PIR_STAGE_NAMES } from '../data/pirStages';
+
+const STAGES_COUNT = PIR_STAGE_NAMES.length;
+const STAGES_VISIBLE = 11;      // сколько позиций видно без прокрутки
+const STAGE_ROW_HEIGHT = 46;    // высота одной строки этапа, px (подстройте при необходимости)
 
 export const PirBranchCard = ({ branchKey, branchLabel, routes, color, manualPct }) => {
   const [expanded, setExpanded] = useState(false);
 
   const agg = useMemo(() => {
     const totalKm = routes.reduce((s, r) => s + (r.km || 0), 0);
-    // Прогресс, взвешенный по километражу: вклад маршрута = его км × (выполнено этапов / 21)
+    // Прогресс, взвешенный по километражу: вклад маршрута = его км × (выполнено этапов / число этапов)
     let completedKm = 0;
     routes.forEach(r => {
       const doneStages = r.stages.reduce((c, st) => c + (st.done ? 1 : 0), 0);
-      completedKm += (r.km || 0) * (doneStages / 21);
+      completedKm += (r.km || 0) * (doneStages / STAGES_COUNT);
     });
     const overallPercent = totalKm > 0 ? (completedKm / totalKm) * 100 : 0;
 
     // Активные этапы: где хоть у одного маршрута есть план или факт; прогресс по км
     const stages = [];
-    for (let i = 0; i < 21; i++) {
+    for (let i = 0; i < STAGES_COUNT; i++) {
       const active = routes.some(r => r.stages[i] && (r.stages[i].planDate || r.stages[i].factDate));
       if (!active) continue;
       const doneKm = routes.reduce((s, r) => s + (r.stages[i] && r.stages[i].done ? (r.km || 0) : 0), 0);
       stages.push({ idx: i, name: (routes[0] && routes[0].stages[i] ? routes[0].stages[i].name : `Этап ${i + 1}`), doneKm });
     }
-    return { totalKm, overallPercent, completedKm, stages };
+    // Показываем только этапы, где выполнено хоть сколько-то км (с нулём — скрыты)
+    const visibleStages = stages.filter(s => s.doneKm > 0);
+    return { totalKm, overallPercent, completedKm, stages, visibleStages };
   }, [routes]);
 
   
@@ -49,11 +56,20 @@ export const PirBranchCard = ({ branchKey, branchLabel, routes, color, manualPct
       {expanded && (
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 14, marginBottom: 6 }}>
           <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 12 }}>
-            Этапы ({agg.stages.filter(s => s.doneKm > 0).length})
+            Этапы ({agg.visibleStages.length})
           </div>
-          {agg.stages.filter(s => s.doneKm > 0).map(s => (
-            <StageProgressBar key={s.idx} stageName={s.name} doneKm={s.doneKm} totalKm={agg.totalKm} color={color} />
-          ))}
+          {/* Окно на ~11 позиций, остальные — прокруткой вниз */}
+          <div style={{
+            maxHeight: STAGES_VISIBLE * STAGE_ROW_HEIGHT,
+            overflowY: 'auto',
+            paddingRight: 6,
+            scrollbarWidth: 'thin',
+            scrollbarColor: `${color}66 transparent`,
+          }}>
+            {agg.visibleStages.map(s => (
+              <StageProgressBar key={s.idx} stageName={s.name} doneKm={s.doneKm} totalKm={agg.totalKm} color={color} />
+            ))}
+          </div>
         </div>
       )}
 

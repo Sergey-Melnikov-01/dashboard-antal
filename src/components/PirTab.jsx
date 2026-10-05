@@ -20,7 +20,7 @@ export const PirTab = ({ pirVolsData }) => {
     const name = String(cells[3] || cells[0] || '').trim();
     const km = parseFloat(cells[5]) || 0;
     const stages = [];
-    for (let i = 0; i < 21; i++) {
+    for (let i = 0; i < PIR_STAGE_NAMES.length; i++) {
       const planDate = String(cells[9 + i * 2] || '').trim() || null;
       const factDate = String(cells[10 + i * 2] || '').trim() || null;
       const done = factDate ? new Date(factDate) <= today : false;
@@ -60,7 +60,7 @@ const manualPct = useMemo(() => {
     let completedKm = 0;
     routesData.forEach(r => {
       const doneStages = r.stages.reduce((c, st) => c + (st.done ? 1 : 0), 0);
-      completedKm += (r.kmы || 0) * (doneStages / 21);
+      completedKm += (r.km || 0) * (doneStages / PIR_STAGE_NAMES.length);
     });
     const pct = totalKm > 0 ? (completedKm / totalKm) * 100 : 0;
     return { routes: routesData.length, totalKm, pct };
