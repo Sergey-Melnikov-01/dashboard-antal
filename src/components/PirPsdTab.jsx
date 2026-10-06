@@ -8,6 +8,10 @@ import { MusTab } from './MusTab';
 // Единый стиль для всех переключателей режимов (ПИР / ПИР-Ветки / МУС-Ветки) — чтобы они гарантированно выглядели одинаково
 const modeButtonStyle = { padding: '8px 18px', fontSize: '13px' };
 
+// Трекер ВОЛС: сколько задач видно без прокрутки и высота одной строки (px)
+const TRACKER_VISIBLE = 11;
+const TRACKER_ROW_HEIGHT = 92; // шаг между строками ~91.5px; подстройте при необходимости
+
 // Обёртка вкладки «ПИР/ПСД»: переключатель режимов (ПИР / Ветки / ПСД) + их содержимое
 export const PirPsdTab = ({ activeTab, pirData, pirVolsData, musData, musColors }) => {
   const [pirMode, setPirMode] = useState('psd');
@@ -118,9 +122,19 @@ export const PirPsdTab = ({ activeTab, pirData, pirVolsData, musData, musColors 
                  ТРЕКЕР ВОЛС — Линейная часть
               </div>
               {pirStages.vols.length > 0
-                ? pirStages.vols.map((s, i) => (
-                    <ProgressBar key={i} label={s.name} plan={s.plan} fact={s.fact} pct={s.pct} unit={s.unit} />
-                  ))
+                ? (
+                  <div style={{
+                    maxHeight: TRACKER_VISIBLE * TRACKER_ROW_HEIGHT,
+                    overflowY: 'auto',
+                    paddingRight: 8,
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: 'rgba(45,226,166,0.4) transparent',
+                  }}>
+                    {pirStages.vols.map((s, i) => (
+                      <ProgressBar key={i} label={s.name} plan={s.plan} fact={s.fact} pct={s.pct} unit={s.unit} />
+                    ))}
+                  </div>
+                )
                 : <div style={{ color: '#64748b', fontSize: 13 }}>Нет данных по ВОЛС</div>
               }
             </div>
