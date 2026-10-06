@@ -14,6 +14,7 @@ import { SmrTab } from './components/SmrTab';
 import { UsTab } from './components/UsTab';
 import { VolsMapTab } from './components/VolsMapTab';
 import { ForecastTab } from './components/ForecastTab';
+import { SpiderPlanTab } from './components/SpiderPlanTab';
 import antalLogo from './assets/antal-logo.png';
 
 const bg = '#1c1d26';
@@ -23,7 +24,7 @@ const lbl = { color: '#94a3b8', fontSize: '11px', marginBottom: '6px', textTrans
 
 // ProgressBar — компонент для трекера этапов ПИР
 export default function App() {
-  const { allData, metricsData, kpiData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, tmcFactData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, contractorsData, usHistoryData, loading, error, refetch } = useDashboardData();
+  const { allData, metricsData, kpiData, pirData, pirVolsData, musData, musColors, usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, tmcFactData, spiderPlanData, datesData, smrPercentData, volsRouteData, musVolsData, codVolsData, contractorsData, usHistoryData, loading, error, refetch } = useDashboardData();
   const [activeTab, setActiveTab] = useState('construction'); // 'construction' | 'schedule' (metrics)
   const [animatingTab, setAnimatingTab] = useState(null);
 
@@ -60,17 +61,17 @@ export default function App() {
     setTimeout(() => setAnimatingTab(null), 700);
   };
 
-  // Скрытая вкладка "Прогноз": открывается клавишей "s", в навигации кнопки нет.
+  // Скрытые вкладки: "Прогноз" — клавиша "s", "План Spider" — клавиша "Ф"/"A" (одна физическая клавиша KeyA); в навигации кнопок нет.
   // Игнорируем нажатие, если фокус в поле ввода/текстовом поле, а также если
   // зажат Ctrl/Cmd/Alt (чтобы не перехватывать системные сочетания клавиш).
   useEffect(() => {
     const onKeyDown = (e) => {
-      if (e.code !== 'KeyS') return; // физическая клавиша S — не зависит от раскладки (в отличие от e.key)
+      if (e.code !== 'KeyS' && e.code !== 'KeyA') return; // физические клавиши S и A(Ф) — не зависят от раскладки (в отличие от e.key)
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const tag = e.target?.tagName;
       const isEditable = e.target?.isContentEditable;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || isEditable) return;
-      setActiveTab('forecast');
+      setActiveTab(e.code === 'KeyA' ? 'spider' : 'forecast');
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -310,13 +311,16 @@ export default function App() {
     </div>
   );
 
+  // скрытые страницы без шапки и навигации (вместо них — крестик выхода)
+  const isSecretTab = activeTab === 'forecast' || activeTab === 'spider';
+
   // choose date options based on active tab
   const dateOptionsForDropdown = activeTab === 'schedule' ? metricsDates : dates;
 
   return (
     <div className="app-wrapper" style={{ minHeight: '100vh', background: bg, color: '#e2e8f0', fontFamily: 'Inter, sans-serif' }}>
-      {/* Header — скрываем на секретной странице "Прогноз" */}
-      {activeTab !== 'forecast' && (
+      {/* Header — скрываем на секретных страницах "Прогноз" и "План Spider" */}
+      {!isSecretTab && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
           <div style={{ color: '#94a3b8', fontSize: '12px' }}>
             ДАННЫЕ ОБНОВЛЕНЫ:<br />
@@ -327,7 +331,7 @@ export default function App() {
       )}
 
       {/* Tabs — тоже скрыты на секретной странице; вместо них — крестик выхода */}
-      {activeTab !== 'forecast' ? (
+      {!isSecretTab ? (
         <div className="tabs-container" style={{ marginBottom: '24px' }}>
           {tabs.map((tab) => (
             <button
@@ -600,7 +604,11 @@ export default function App() {
         <ForecastTab kpiData={kpiData} />
       )}
 
-      {activeTab !== 'construction' && activeTab !== 'schedule' && activeTab !== 'pir' && activeTab !== 'materials' && activeTab !== 'us' && activeTab !== 'map' && activeTab !== 'forecast' && (
+      {activeTab === 'spider' && (
+        <SpiderPlanTab spiderPlanData={spiderPlanData} />
+      )}
+
+      {activeTab !== 'construction' && activeTab !== 'schedule' && activeTab !== 'pir' && activeTab !== 'materials' && activeTab !== 'us' && activeTab !== 'map' && activeTab !== 'forecast' && activeTab !== 'spider' && (
         <div style={{ ...card, alignItems: 'center', justifyContent: 'center', minHeight: '300px', textAlign: 'center' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#2de2a6', marginBottom: '8px' }}>В разработке</div>

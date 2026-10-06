@@ -21,6 +21,7 @@ export function useDashboardData() {
   const [tmcData, setTmcData] = useState([]);
   const [tmcDvaData, setTmcDvaData] = useState([]);
   const [tmcFactData, setTmcFactData] = useState([]);
+  const [spiderPlanData, setSpiderPlanData] = useState([]); // DB_SpiderPlan — план работ по бригадам из Spider (разбирается в utils/parseSpiderPlan)
   const [datesData, setDatesData] = useState([]);
   const [smrPercentData, setSmrPercentData] = useState([]);
   const [volsRouteData, setVolsRouteData] = useState([]);
@@ -60,6 +61,7 @@ export function useDashboardData() {
     setTmcDvaData(tmcDvaKey && Array.isArray(raw[tmcDvaKey]) ? raw[tmcDvaKey] : []);
 
     setTmcFactData(Array.isArray(raw?.DB_TMC_FACT) ? raw.DB_TMC_FACT : []);
+    setSpiderPlanData(Array.isArray(raw?.DB_SpiderPlan) ? raw.DB_SpiderPlan : []);
     setDatesData(Array.isArray(raw?.DB_DATES) ? raw.DB_DATES : []);
     setSmrPercentData(Array.isArray(raw?.DB_SMR_PERCENT) ? raw.DB_SMR_PERCENT : []);
     setVolsRouteData(Array.isArray(raw?.DB_VOLS_ROUTE) ? raw.DB_VOLS_ROUTE : []);
@@ -122,7 +124,7 @@ export function useDashboardData() {
 
   return {
     allData, metricsData, kpiData, pirData, pirVolsData, musData, musColors,
-    usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, tmcFactData,
+    usGreenData, usBlueData, usRedData, tmcData, tmcDvaData, tmcFactData, spiderPlanData,
     datesData, smrPercentData, volsRouteData, musVolsData, codVolsData,
     contractorsData, usHistoryData,
     loading, error, refetch,
