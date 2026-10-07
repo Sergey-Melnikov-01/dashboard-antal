@@ -1,7 +1,4 @@
 import { useState, useMemo } from 'react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-} from 'recharts';
 import { parseSpiderPlan } from '../utils/parseSpiderPlan';
 
 // ─────────────────────────────────────────────────────────────
@@ -16,17 +13,6 @@ const ACCENT = '#2de2a6';
 const WARN = '#fb923c';
 
 // Девять максимально различимых цветов: только один зелёный (малая механизация — первая бригада)
-const BRIGADE_COLORS = [
-  '#2de2a6', // зелёный
-  '#2563eb', // синий
-  '#ec4899', // розовый
-  '#facc15', // жёлтый
-  '#a855f7', // фиолетовый
-  '#f97316', // оранжевый
-  '#dc2626', // красный
-  '#22d3ee', // голубой
-  '#cbd5e1', // светло-серый
-];
 
 const dm = (iso) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
 const sum = (arr) => arr.reduce((s, v) => s + (v || 0), 0);
@@ -48,8 +34,12 @@ const lastActiveIdx = (w) => {
 
 // ───────────── Таблица план по неделям (общая для всех вкладок) ─────────────
 const PlanTable = ({ weeks, rows, totalRow, totalLabel = 'Итого' }) => {
-  const [open, setOpen] = useState({});
-  const parentMax = useMemo(() => Math.max(1, ...rows.map((r) => Math.max(0, ...r.w))), [rows]);
+  const [open, setOpen] = useState(() => {
+    const o = {};
+    rows.forEach((r, i) => { if (r.open) o[String(i)] = true; });
+    return o;
+  });
+  const parentMax = useMemo(() => Math.max(1, ...rows.filter((r) => r.w).map((r) => Math.max(0, ...r.w))), [rows]);
 
   const th = (extra = {}) => ({
     padding: '8px 6px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textAlign: 'center',
@@ -180,85 +170,199 @@ const Kpi = ({ label, value, sub, color = '#fff' }) => (
   </div>
 );
 
-// ───────────── Локальный тултип (как в остальных графиках: тёмная тема) ─────────────
-const ChartTip = ({ active, payload, label }) => {
-  if (!active || !payload || !payload.length) return null;
-  const items = payload.filter((p) => p.value > 0);
-  if (!items.length) return null;
-  const total = sum(items.map((p) => p.value));
-  return (
-    <div style={{
-      background: '#0f1724', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10,
-      padding: '10px 12px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', fontSize: 12, color: '#e2e8f0',
-    }}>
-      <div style={{ fontWeight: 800, marginBottom: 6 }}>Неделя с {label}</div>
-      {items.map((p) => (
-        <div key={p.dataKey} style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-          <span style={{ color: p.color }}>{p.dataKey}</span>
-          <span>{fmt(p.value)} км</span>
-        </div>
-      ))}
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 6, paddingTop: 6, fontWeight: 800 }}>
-        Итого: {fmt(total)} км
-      </div>
-    </div>
-  );
+// ───────────── Вкладка: Укладка трубы до 15.11 ─────────────
+// Сколько каждому подрядчику / бригаде / на каком участке нужно уложить трубы по плану Spider.
+// Берутся виды работ «укладка трубы» и «остатки по укладке трубы». Задувка и бронированный кабель сюда не входят.
+const PIPE_TYPES = ['укладка трубы', 'остатки по укладке трубы'];
+const daysBetween = (aIso, bIso) => Math.round((Date.parse(bIso) - Date.parse(aIso)) / 86400000);
+const contractorOf = (name) => {
+  const m = /^СК\s+\S+/.exec(name);
+  return m ? m[0] : name.split(' ')[0];
 };
+const marginColor = (d) => (d == null ? '#64748b' : d < 0 ? '#f87171' : d <= 7 ? '#fbbf24' : ACCENT);
+const marginText = (d) => (d == null ? '—' : d < 0 ? `−${Math.abs(d)} дн` : `${d} дн`);
 
-// ───────────── Вкладка: Линейная часть ─────────────
-const LinearView = ({ weeks, plan }) => {
-  const { linear, linearTotal } = plan;
+const PipeView = ({ weeks, plan }) => {
+  const { linear, hasWorkTypes } = plan;
+  const [open, setOpen] = useState({});
 
-  const rows = useMemo(() => linear.map((b) => ({
-    label: b.name, w: b.w, total: sum(b.w),
-    children: b.sections.map((s) => ({ label: s.name, w: s.w, total: sum(s.w) })),
-  })), [linear]);
+  const pipeRows = useMemo(
+    () => linear.filter((r) => !hasWorkTypes || PIPE_TYPES.includes((r.type || '').toLowerCase())),
+    [linear, hasWorkTypes],
+  );
+  const skipped = hasWorkTypes ? linear.filter((r) => !r.type).map((r) => r.name) : [];
 
-  const total = sum(linearTotal);
-  const beforeKm = sum(linearTotal.filter((_, i) => !isPast(weeks[i])));
+  const sumW = (rowsArr) => {
+    const acc = new Array(weeks.length).fill(0);
+    rowsArr.forEach((r) => r.w.forEach((v, i) => { acc[i] += v; }));
+    return acc;
+  };
+  const finishOf = (w) => {
+    const li = lastActiveIdx(w);
+    return li >= 0 ? weeks[li].end : null;
+  };
+  const marginOf = (w) => {
+    const f = finishOf(w);
+    return f ? daysBetween(f, DEADLINE) : null;
+  };
+
+  const groups = useMemo(() => {
+    const map = new Map();
+    pipeRows.forEach((r) => {
+      const c = contractorOf(r.name);
+      if (!map.has(c)) map.set(c, []);
+      map.get(c).push(r);
+    });
+    return [...map.entries()].map(([name, rs]) => ({
+      name,
+      brigades: rs.map((r) => ({
+        label: (r.name.replace(name, '').trim() || r.name)
+          + (r.type && r.type.toLowerCase() !== 'укладка трубы' ? ` · ${r.type.toLowerCase()}` : ''),
+        w: r.w,
+        sections: r.sections.filter((x) => sum(x.w) > 0),
+      })),
+      w: sumW(rs),
+    }));
+  }, [pipeRows]);
+
+  const totalW = sumW(pipeRows);
+  const total = sum(totalW);
+  const beforeKm = sum(totalW.filter((_, i) => !isPast(weeks[i])));
   const afterKm = total - beforeKm;
-  const peakIdx = linearTotal.reduce((m, v, i, a) => (v > a[m] ? i : m), 0);
 
-  const chartData = weeks.map((w, i) => {
-    const row = { name: dm(w.start) };
-    linear.forEach((b) => { row[b.name] = b.w[i] || 0; });
-    return row;
+  // колонки-недели: до последней недели с объёмом, но не короче, чем до границы 15.11
+  const deadlineIdx = weeks.reduce((m, w, i) => (w.end <= DEADLINE ? i : m), 0);
+  const cols = Math.max(lastActiveIdx(totalW), deadlineIdx) + 1;
+  const shown = weeks.slice(0, cols);
+
+  const th = (x = {}) => ({
+    padding: '7px 6px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textAlign: 'center', whiteSpace: 'nowrap',
+    borderBottom: '1px solid rgba(255,255,255,0.08)', ...x,
   });
-  const lastIdx = lastActiveIdx(linearTotal);
-  const visible = chartData.slice(0, Math.max(lastIdx + 1, 1));
+  const sticky = (bg) => ({ position: 'sticky', left: 0, zIndex: 1, background: bg, textAlign: 'left', minWidth: 260, maxWidth: 340 });
+  const wkCell = (v, max) => ({
+    padding: '4px 4px', fontSize: 12, textAlign: 'center', minWidth: 48, color: v ? '#e2e8f0' : 'transparent',
+    background: v ? `rgba(59,130,246,${Math.min(0.6, 0.1 + (v / max) * 0.5)})` : 'transparent',
+  });
+  const edge = (i) => (i > 0 && isPast(shown[i]) && !isPast(shown[i - 1]) ? { borderLeft: `2px solid ${WARN}` } : {});
+
+  const renderLine = (key, label, w, level, opts = {}) => {
+    const max = Math.max(1, ...w);
+    const tot = sum(w);
+    const m = marginOf(w);
+    const f = finishOf(w);
+    const bg = level === 0 ? '#1a2332' : level === 1 ? '#141c2b' : '#101826';
+    return (
+      <tr
+        key={key}
+        onClick={opts.onClick}
+        style={{ cursor: opts.onClick ? 'pointer' : 'default', borderTop: '1px solid rgba(255,255,255,0.04)' }}
+      >
+        <td style={{
+          ...sticky(bg), padding: `5px 10px 5px ${10 + level * 18}px`,
+          fontSize: level === 0 ? 13 : 12, fontWeight: level === 2 ? 400 : level === 0 ? 800 : 600,
+          color: level === 0 ? '#fff' : level === 1 ? '#e2e8f0' : '#94a3b8',
+        }}>
+          {opts.onClick && <span style={{ color: ACCENT, marginRight: 6 }}>{opts.isOpen ? '▾' : '▸'}</span>}
+          {label}
+        </td>
+        <td style={{ padding: '4px 8px', fontSize: 12, fontWeight: 800, color: ACCENT, textAlign: 'right', whiteSpace: 'nowrap' }}>
+          {fmt(tot)}
+        </td>
+        {shown.map((_, i) => (
+          <td key={i} style={{ ...wkCell(w[i], max), ...edge(i) }}>{fmt(w[i])}</td>
+        ))}
+        <td style={{ padding: '4px 8px', fontSize: 12, color: '#cbd5e1', textAlign: 'center', whiteSpace: 'nowrap' }}>
+          {f ? dm(f) : '—'}
+        </td>
+        <td style={{ padding: '4px 8px', fontSize: 12, fontWeight: 700, color: marginColor(m), textAlign: 'center', whiteSpace: 'nowrap' }}>
+          {marginText(m)}
+        </td>
+      </tr>
+    );
+  };
 
   return (
     <>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginBottom: 18 }}>
-        <Kpi label="План линейной части" value={`${fmt(total)} км`} sub={`${linear.length} бригад`} />
-        <Kpi label="До 15.11 включительно" value={`${fmt(beforeKm)} км`} color={ACCENT}
-          sub={`${total ? ((beforeKm / total) * 100).toFixed(1) : 0}% плана Spider`} />
-        <Kpi label="После 15.11" value={`${fmt(afterKm)} км`} color={afterKm > 0 ? WARN : ACCENT}
-          sub={lastIdx >= 0 ? `последняя неделя с ${dm(weeks[lastIdx].start)}` : ''} />
-        <Kpi label="Пик недели" value={`${fmt(linearTotal[peakIdx])} км`} sub={`неделя с ${dm(weeks[peakIdx].start)}`} />
+      {!hasWorkTypes && (
+        <div style={{ fontSize: 12, color: WARN, marginBottom: 12 }}>
+          В листе не найдена колонка «Вид работ»: показаны все строки линейной части, не только укладка трубы.
+        </div>
+      )}
+      {skipped.length > 0 && (
+        <div style={{ fontSize: 12, color: WARN, marginBottom: 12 }}>
+          Не указан вид работ у: {skipped.join(', ')} — эти строки не учтены.
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <Kpi
+          label="Уложить до 15.11.2026"
+          value={`${fmt(total)} км`}
+          color={ACCENT}
+          sub={afterKm > 0 ? `после 15.11 запланировано ещё ${fmt(afterKm)} км` : `${groups.length} подрядчика · ${pipeRows.length} бригад · по плану Spider укладывается в срок`}
+        />
+        {groups.map((g) => {
+          const m = marginOf(g.w);
+          return (
+            <Kpi
+              key={g.name}
+              label={g.name}
+              value={`${fmt(sum(g.w))} км`}
+              sub={`${g.brigades.length} бригад · завершение ${finishOf(g.w) ? dm(finishOf(g.w)) : '—'} · запас ${marginText(m)}`}
+            />
+          );
+        })}
       </div>
 
-      <div style={{ background: '#1a2332', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '14px 8px 6px', marginBottom: 18 }}>
-        <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 700, margin: '0 10px 8px', textTransform: 'uppercase', letterSpacing: 0.6 }}>
-          План по неделям и бригадам, км
-        </div>
-        <div style={{ height: 300 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={visible} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-              <XAxis dataKey="name" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
-              <Tooltip content={<ChartTip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {linear.map((b, i) => (
-                <Bar key={b.code} dataKey={b.name} stackId="km" fill={BRIGADE_COLORS[i % BRIGADE_COLORS.length]} stroke="#1a2332" strokeWidth={1} />
+      <div style={{ overflow: 'auto', maxHeight: '62vh', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12 }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 3, background: '#0f1724' }}>
+            <tr>
+              <th style={{ ...th({ textAlign: 'left', padding: '7px 10px' }), ...sticky('#0f1724') }}>Подрядчик / бригада / участок</th>
+              <th style={th({ textAlign: 'right' })}>Км</th>
+              {shown.map((w, i) => (
+                <th key={i} title={`${dm(w.start)} – ${dm(w.end)}`} style={th({ color: isPast(w) ? WARN : '#94a3b8', ...edge(i) })}>
+                  {dm(w.start)}
+                </th>
               ))}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+              <th style={th()}>Завершение</th>
+              <th style={th()}>Запас до 15.11</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g, gi) => {
+              const gk = `g${gi}`;
+              return [
+                renderLine(gk, g.name, g.w, 0, { onClick: () => setOpen((o) => ({ ...o, [gk]: o[gk] === false })), isOpen: open[gk] !== false }),
+                ...(open[gk] === false ? [] : g.brigades.flatMap((b, bi) => {
+                  const bk = `${gk}-b${bi}`;
+                  const canOpen = b.sections.length > 0;
+                  return [
+                    renderLine(bk, b.label, b.w, 1, canOpen ? { onClick: () => setOpen((o) => ({ ...o, [bk]: !o[bk] })), isOpen: !!open[bk] } : {}),
+                    ...(open[bk] ? b.sections.map((x, xi) => renderLine(`${bk}-s${xi}`, x.name, x.w, 2)) : []),
+                  ];
+                })),
+              ];
+            })}
+            <tr style={{ borderTop: '2px solid rgba(45,226,166,0.35)' }}>
+              <td style={{ ...sticky('#0f1724'), padding: '8px 10px', fontSize: 13, fontWeight: 800, color: ACCENT }}>Итого к укладке</td>
+              <td style={{ padding: '4px 8px', fontSize: 13, fontWeight: 800, color: ACCENT, textAlign: 'right' }}>{fmt(total)}</td>
+              {shown.map((_, i) => (
+                <td key={i} style={{ padding: '4px 4px', fontSize: 12, fontWeight: 800, color: ACCENT, textAlign: 'center', ...edge(i) }}>
+                  {fmt(totalW[i])}
+                </td>
+              ))}
+              <td />
+              <td />
+            </tr>
+          </tbody>
+        </table>
       </div>
-
-      <PlanTable weeks={weeks} rows={rows} totalRow={{ label: 'Итого, км', w: linearTotal, total }} totalLabel="Итого, км" />
+      <div style={{ fontSize: 11, color: '#64748b', marginTop: 8 }}>
+        План Spider по неделям (км). «Завершение» — конец последней недели с объёмом; «запас» — дней до 15.11.2026.
+        Нажмите на подрядчика или бригаду, чтобы раскрыть или свернуть участки.
+      </div>
     </>
   );
 };
@@ -406,12 +510,12 @@ export const SpiderPlanTab = ({ spiderPlanData }) => {
       ) : (
         <>
           <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
-            {tabBtn('linear', 'Линейная часть')}
+            {tabBtn('linear', 'Укладка трубы до 15.11')}
             {tabBtn('gnb', 'ГНБ (пересечения)')}
             {tabBtn('mus', 'МУС / ЦОД')}
           </div>
 
-          {tab === 'linear' && <LinearView weeks={weeks} plan={plan} />}
+          {tab === 'linear' && <PipeView weeks={weeks} plan={plan} />}
           {tab === 'gnb' && <GnbView weeks={weeks} plan={plan} />}
           {tab === 'mus' && <MusView weeks={weeks} plan={plan} />}
         </>
