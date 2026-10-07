@@ -33,6 +33,7 @@ export default function App() {
     selectedBranch, setSelectedBranch,
     selectedContractor, setSelectedContractor,
     selectedSection, setSelectedSection,
+    selectedSmrSections, setSelectedSmrSections,
     selectedDate, setSelectedDate,
     openDropdown, setOpenDropdown,
   } = useSharedFilters();
@@ -373,6 +374,7 @@ export default function App() {
           selectedBranch={selectedBranch} setSelectedBranch={setSelectedBranch}
           selectedContractor={selectedContractor} setSelectedContractor={setSelectedContractor}
           selectedSection={selectedSection} setSelectedSection={setSelectedSection}
+          selectedSmrSections={selectedSmrSections} setSelectedSmrSections={setSelectedSmrSections}
           selectedDate={selectedDate} setSelectedDate={setSelectedDate}
           openDropdown={openDropdown} setOpenDropdown={setOpenDropdown}
         />

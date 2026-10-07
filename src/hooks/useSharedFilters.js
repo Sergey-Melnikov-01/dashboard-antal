@@ -5,6 +5,7 @@ export function useSharedFilters() {
   const [selectedBranch, setSelectedBranch] = useState('Все');
   const [selectedContractor, setSelectedContractor] = useState('Все');
   const [selectedSection, setSelectedSection] = useState('Все');
+  const [selectedSmrSections, setSelectedSmrSections] = useState([]); // вкладка СМР: несколько участков ([] = все)
   const [selectedDate, setSelectedDate] = useState('');
   const [openDropdown, setOpenDropdown] = useState(null);
 
@@ -12,6 +13,7 @@ export function useSharedFilters() {
     selectedBranch, setSelectedBranch,
     selectedContractor, setSelectedContractor,
     selectedSection, setSelectedSection,
+    selectedSmrSections, setSelectedSmrSections,
     selectedDate, setSelectedDate,
     openDropdown, setOpenDropdown,
   };

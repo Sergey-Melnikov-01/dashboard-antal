@@ -46,6 +46,7 @@ export const SmrTab = ({
   selectedBranch, setSelectedBranch,
   selectedContractor, setSelectedContractor,
   selectedSection, setSelectedSection,
+  selectedSmrSections, setSelectedSmrSections,
   selectedDate, setSelectedDate,
   openDropdown, setOpenDropdown,
 }) => {
@@ -66,12 +67,40 @@ export const SmrTab = ({
     )];
   }, [allData, selectedBranch, selectedContractor]);
 
-  const filtered = useDatasetView(allData, {
+  // Выбранные участки (только те, что есть в текущем списке — на случай смены ветки/подрядчика на другой вкладке)
+  const selSections = useMemo(
+    () => (Array.isArray(selectedSmrSections) ? selectedSmrSections : []).filter(sec => sections.includes(sec)),
+    [selectedSmrSections, sections],
+  );
+  const hasSel = selSections.length > 0;
+
+  // Нет выбранных участков — как раньше, все участки по текущим ветке/подрядчику/дате
+  const filteredAll = useDatasetView(allData, {
     branch: selectedBranch,
     contractor: selectedContractor,
-    section: selectedSection,
+    section: 'Все',
     date: activeDate,
   });
+
+  // Строки по каждому выбранному участку отдельно
+  const rowsBySection = useMemo(() => {
+    const map = {};
+    selSections.forEach(sec => {
+      map[sec] = filterRows(allData, {
+        date: activeDate,
+        branch: selectedBranch,
+        contractor: selectedContractor,
+        section: sec,
+      });
+    });
+    return map;
+  }, [selSections, allData, activeDate, selectedBranch, selectedContractor]);
+
+  // Итог по выбранным участкам = сумма их строк (суммируются НЗС / Материалы / СМР в спидометрах)
+  const filtered = useMemo(
+    () => (hasSel ? selSections.flatMap(sec => rowsBySection[sec] || []) : filteredAll),
+    [hasSel, selSections, rowsBySection, filteredAll],
+  );
 
   const { totalFactCable, totalFactPipe, totalPlan } = useMemo(() => {
     const cable = filtered.reduce((s, r) => s + toNum(r["Факт кабель км"]), 0);
@@ -80,11 +109,10 @@ export const SmrTab = ({
     return { totalFactCable: cable, totalFactPipe: pipe, totalPlan: plan };
   }, [filtered]);
 
-  // «Выполнение» — три режима:
-  //  1) Выбран конкретный УЧАСТОК — берём его собственный "% вып." прямо из DB_SMR (колонка H),
-  //     а не ручное значение по ветке. Это фактический процент именно по этому участку.
-  //  2) Выбрана конкретная ВЕТКА (участок = «Все») — ручное значение из листа DB_SMR_PERCENT.
-  //  3) ВЕТКА = «Все» — средневзвешенное по веткам DB_SMR_PERCENT (вес = План км ветки за активную дату).
+  // «Выполнение» (когда участки не выбраны) — два режима:
+  //  1) Выбрана конкретная ВЕТКА — ручное значение из листа DB_SMR_PERCENT.
+  //  2) ВЕТКА = «Все» — средневзвешенное по веткам DB_SMR_PERCENT (вес = План км ветки за активную дату).
+  // Для выбранных участков % берётся по каждому участку отдельно (см. perSection ниже).
   // Если данных нет — карточка показывает «—».
   const smrPercent = useMemo(() => {
     const parseAnyDate = s => {
@@ -95,20 +123,6 @@ export const SmrTab = ({
       return new Date(y, m - 1, d);
     };
     const ad = activeDate ? parseDate(activeDate) : null;
-
-    // Режим 1: конкретный участок — фактический "% вып." из DB_SMR за последнюю (не позже activeDate) дату
-    if (selectedSection !== 'Все') {
-      let rows = allData.filter(r => r["Участок"] === selectedSection);
-      if (ad) {
-        rows = rows.filter(r => parseAnyDate(r["Дата отчета"]) <= ad);
-      }
-      if (!rows.length) return null;
-      const latest = rows.reduce((a, b) =>
-        parseAnyDate(a["Дата отчета"]) >= parseAnyDate(b["Дата отчета"]) ? a : b
-      );
-      const raw = toNum(latest["% вып."]);
-      return raw || raw === 0 ? raw * 100 : null;
-    }
 
     if (!Array.isArray(smrPercentData) || !smrPercentData.length) return null;
 
@@ -146,7 +160,39 @@ export const SmrTab = ({
     });
 
     return weightTotal > 0 ? weightedSum / weightTotal : null;
-  }, [smrPercentData, selectedBranch, selectedSection, activeDate, branches, allData]);
+  }, [smrPercentData, selectedBranch, activeDate, branches, allData]);
+
+  // Карточки КПИ по каждому выбранному участку: объёмы за активную дату + собственный "% вып." участка из DB_SMR
+  const perSection = useMemo(() => {
+    const parseAnyDate = v => {
+      if (!v) return new Date(0);
+      const str = String(v);
+      if (str.includes('T')) return new Date(str);
+      const [d, m, y] = str.split('.');
+      return new Date(y, m - 1, d);
+    };
+    const ad = activeDate ? parseDate(activeDate) : null;
+    return selSections.map(sec => {
+      const rows = rowsBySection[sec] || [];
+      let hist = allData.filter(r => r["Участок"] === sec);
+      if (ad) hist = hist.filter(r => parseAnyDate(r["Дата отчета"]) <= ad);
+      let pct = null;
+      if (hist.length) {
+        const latest = hist.reduce((a, b) =>
+          parseAnyDate(a["Дата отчета"]) >= parseAnyDate(b["Дата отчета"]) ? a : b
+        );
+        const raw = toNum(latest["% вып."]);
+        pct = raw || raw === 0 ? raw * 100 : null;
+      }
+      return {
+        sec,
+        plan: rows.reduce((t, r) => t + toNum(r["План км"]), 0),
+        cable: rows.reduce((t, r) => t + toNum(r["Факт кабель км"]), 0),
+        pipe: rows.reduce((t, r) => t + toNum(r["Факт труба км"]), 0),
+        pct,
+      };
+    });
+  }, [selSections, rowsBySection, allData, activeDate]);
 
   // Стоимости: Материалы и СМР
   const { matPlan, matFact, matDev, smrPlan, smrFact, smrDev, nzsPlan, nzsFact} = useMemo(() => {
@@ -164,8 +210,8 @@ export const SmrTab = ({
   }, [filtered]);
 
   const delayKpi = useMemo(() => {
-    // Скрываем если выбран конкретный участок или подрядчик
-    if (selectedSection !== 'Все' || selectedContractor !== 'Все') return null;
+    // Скрываем если выбран хотя бы один участок или подрядчик
+    if (hasSel || selectedContractor !== 'Все') return null;
     if (!datesData.length) return null;
 
     // Парсит и ISO-строки ('2026-07-08T...') и dd.mm.yyyy
@@ -223,7 +269,7 @@ export const SmrTab = ({
     const endDate = formatEndDate(latest["Текущая дата окончания"]);
 
     return { days, color, status, endDate };
-  }, [datesData, selectedBranch, selectedSection, selectedContractor, activeDate]);
+  }, [datesData, selectedBranch, hasSel, selectedContractor, activeDate]);
 
   // Даты для графиков динамики, обрезанные по выбранному фильтру «Дата»: если выбрана
   // конкретная дата отчёта, график заканчивается на ней, а не тянется до самого свежего отчёта
@@ -238,6 +284,7 @@ export const SmrTab = ({
   const TREND_CHART_START_DATE = '11.06.2026';
 
   const trendData = useMemo(() => {
+    if (hasSel) return []; // график скрыт, когда выбраны конкретные участки
     const trendDates = visibleDates.filter(d => parseDate(d) >= parseDate(TREND_CHART_START_DATE));
     return trendDates.map(date => {
       const rows = allData.filter(r => {
@@ -245,7 +292,6 @@ export const SmrTab = ({
         if (r["Дата отчета"] !== date) return false;
         if (selectedBranch !== 'Все' && r["Ветка"] !== selectedBranch) return false;
         if (selectedContractor !== 'Все' && r["Подрядчик"] !== selectedContractor) return false;
-        if (selectedSection !== 'Все' && r["Участок"] !== selectedSection) return false;
         return true;
       });
       const f = rows.reduce((s, r) => s + toNum(r["Факт кабель км"]), 0);
@@ -253,7 +299,7 @@ export const SmrTab = ({
       const p = rows.reduce((s, r) => s + toNum(r["План км"]), 0);
       return { date, plan: +p.toFixed(1), fact: +f.toFixed(1), pipe: t > 0 ? +t.toFixed(1) : null, pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 };
     });
-  }, [visibleDates, allData, selectedBranch, selectedContractor, selectedSection]);
+  }, [visibleDates, allData, selectedBranch, selectedContractor, hasSel]);
 
   // Динамика по датам для карточек-спидометров СМР (Материалы по НЗС / Материалы / СМР), в тенге.
   // Данные по каждой дате изначально накопительные (снимок "сколько уже
@@ -273,12 +319,19 @@ export const SmrTab = ({
     const startMs = parseDate(SMR_CHART_START_DATE);
     Object.entries(smrChartConfig).forEach(([catName, { planField, factField }]) => {
       const cumulative = visibleDates.map(date => {
-        const rows = filterRows(allData, {
-          date,
-          branch: selectedBranch,
-          contractor: selectedContractor,
-          section: selectedSection,
-        });
+        const rows = hasSel
+          ? selSections.flatMap(sec => filterRows(allData, {
+              date,
+              branch: selectedBranch,
+              contractor: selectedContractor,
+              section: sec,
+            }))
+          : filterRows(allData, {
+              date,
+              branch: selectedBranch,
+              contractor: selectedContractor,
+              section: 'Все',
+            });
         const planCum = rows.reduce((s, r) => s + toNum(r[planField]), 0);
         const factCum = rows.reduce((s, r) => s + toNum(r[factField]), 0);
         return { date, planCum, factCum };
@@ -301,7 +354,7 @@ export const SmrTab = ({
       });
     });
     return result;
-  }, [visibleDates, allData, selectedBranch, selectedContractor, selectedSection]);
+  }, [visibleDates, allData, selectedBranch, selectedContractor, hasSel, selSections]);
 
   const contractorStats = useMemo(() => {
     return contractors.map(c => {
@@ -323,7 +376,7 @@ export const SmrTab = ({
           label="Ветка"
           value={selectedBranch}
           options={branches}
-          onChange={v => { setSelectedBranch(v); setSelectedSection('Все'); }}
+          onChange={v => { setSelectedBranch(v); setSelectedSection('Все'); setSelectedSmrSections([]); }}
         />
         <PushDropdown
           openDropdown={openDropdown}
@@ -332,33 +385,19 @@ export const SmrTab = ({
           label="Подрядчик"
           value={selectedContractor}
           options={contractors}
-          onChange={v => { setSelectedContractor(v); setSelectedSection('Все'); }}
+          onChange={v => { setSelectedContractor(v); setSelectedSection('Все'); setSelectedSmrSections([]); }}
         />
         <PushDropdown
           openDropdown={openDropdown}
           setOpenDropdown={setOpenDropdown}
           name="section"
           label="Участок"
-          value={selectedSection}
+          value={selSections}
           options={sections}
-          onChange={v => {
-            setSelectedSection(v);
-            setOpenDropdown(null); // ЗАКРЫВАЕМ фильтр после выбора
-
-            if (v !== 'Все') {
-              // Ищем именно в allData, так как это исходный массив
-              const row = allData.find(r => r["Участок"] === v);
-              if (row) {
-                // Автоматически выставляем Подрядчика и Ветку
-                if (row["Подрядчик"]) setSelectedContractor(row["Подрядчик"]);
-                if (row["Ветка"]) setSelectedBranch(row["Ветка"]);
-              }
-            } else {
-              // Если выбрали "Все", сбрасываем зависимые фильтры
-              setSelectedContractor('Все');
-              setSelectedBranch('Все');
-            }
-          }}
+          onChange={v => setSelectedSmrSections(v)}
+          multi
+          emptyText="Все"
+          maxShown={2}
         />
         <PushDropdown
           openDropdown={openDropdown}
@@ -382,8 +421,8 @@ export const SmrTab = ({
         />
       </div>
 
-      {/* KPI Row 1 — Объёмы */}
-      {(() => {
+      {/* KPI Row 1 — Объёмы (когда участки не выбраны) */}
+      {!hasSel && (() => {
         // Карточка «Факт труба км» появилась только с отчёта от 09.09.2026 — для более ранних
         // дат это поле всегда 0, поэтому карточку показываем, только если есть реальные данные
         const showPipeKpi = totalFactPipe > 0;
@@ -436,15 +475,46 @@ export const SmrTab = ({
         );
       })()}
 
+      {/* KPI по каждому выбранному участку: первый выбрали — один ряд, второй — ещё ряд ниже и т.д. */}
+      {hasSel && perSection.map(d => {
+        const items = [
+          { label: 'План общий', val: d.plan.toFixed(1), unit: 'км', color: '#2898ff' },
+          { label: 'Факт кабель', val: d.cable.toFixed(1), unit: 'км', color: '#2de2a6' },
+          ...(d.pipe > 0 ? [{ label: 'Факт труба', val: d.pipe.toFixed(1), unit: 'км', color: '#a78bfa' }] : []),
+          {
+            label: 'Выполнение',
+            val: d.pct === null ? '—' : d.pct.toFixed(1),
+            unit: d.pct === null ? '' : '%',
+            color: d.pct === null ? '#6b7280' : (d.pct > 100 ? '#ff4d4d' : '#ff9b45'),
+          },
+        ];
+        return (
+          <div key={d.sec} style={{ marginBottom: '16px' }}>
+            <div style={{ ...lbl, color: '#2de2a6', fontWeight: 800, marginBottom: '8px' }}>{d.sec}</div>
+            <div className="kpi-grid-smr" style={{ display: 'grid', gridTemplateColumns: `repeat(${items.length}, 1fr)`, gap: '16px' }}>
+              {items.map((kpi, i) => (
+                <div key={i} style={card}>
+                  <div style={lbl}>{kpi.label}</div>
+                  <div style={{ fontSize: '28px', fontWeight: '800', color: kpi.color, whiteSpace: 'nowrap' }}>
+                    {kpi.val} <span style={{ fontSize: '16px', opacity: 0.7, marginLeft: '4px' }}>{kpi.unit}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
       {/* Charts row */}
       <div className="charts-row-smr" style={{
         display: 'grid',
-        gridTemplateColumns: (nzsPlan > 0 || nzsFact > 0) ? '1fr 2fr' : '1fr 1fr',
+        gridTemplateColumns: hasSel ? '1fr' : ((nzsPlan > 0 || nzsFact > 0) ? '1fr 2fr' : '1fr 1fr'),
         gap: '16px',
         marginBottom: '16px',
         alignItems: 'stretch' }}>
 
       {/* График динамики */}
+      {!hasSel && (
       <div style={card}>
         <div style={lbl}>Динамика выполнения плана (км)</div>
         <ResponsiveContainer width="100%" height={252}>
@@ -489,6 +559,7 @@ export const SmrTab = ({
           </LineChart>
         </ResponsiveContainer>
       </div>
+      )}
 
       {/* Правая часть: карточки со спидометрами (теперь их может быть 2 или 3) */}
       <div className="gauge-row-smr" style={{

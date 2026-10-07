@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const PushDropdown = ({ name, label, value, options, onChange, onReset, openDropdown, setOpenDropdown, multi = false }) => {
+export const PushDropdown = ({ name, label, value, options, onChange, onReset, openDropdown, setOpenDropdown, multi = false, emptyText = 'Нет', maxShown = 0 }) => {
   const isOpen = openDropdown === name;
   const wrapperRef = React.useRef(null);
   const [openLeft, setOpenLeft] = React.useState(false);
@@ -14,7 +14,11 @@ export const PushDropdown = ({ name, label, value, options, onChange, onReset, o
   };
 
   const isActive = multi ? (Array.isArray(value) && value.length > 0) : (value && value !== 'Все' && value !== 'Нет');
-  const buttonText = multi ? ((value && value.length) ? value.join(', ') : 'Нет') : (value || 'Все');
+  const buttonText = multi
+    ? ((value && value.length)
+        ? (maxShown && value.length > maxShown ? `Выбрано: ${value.length}` : value.join(', '))
+        : emptyText)
+    : (value || 'Все');
 
   const handleOptionClick = (opt) => {
     if (multi) {
