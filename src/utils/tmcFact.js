@@ -19,7 +19,7 @@ const material = (fullName, short, unit, keyOverride) => ({
 const GROUPS = [
   {
     groupKey: 'sklad',
-    groupLabel: 'Склад (НЗС)',
+    groupLabel: 'Склад',
     materials: [
       material('Бронированный оптический кабель ОК-48(40G.652D+8G.654C)', 'Кабель ОК-48', 'м'),
       material('Камера оперативного доступа (КОД)', 'КОД', 'шт'),
