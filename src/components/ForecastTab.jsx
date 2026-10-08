@@ -23,6 +23,9 @@ const CONTRACTOR_META = {
   tekhno:   { title: 'ТОО «Техностандарт-М»', match: (name) => name.includes('Техностандарт') },
 };
 
+// За сколько последних недель показываем «недавний» темп рядом со средним за весь период
+const RECENT_WEEKS = 4;
+
 const MS_DAY = 24 * 60 * 60 * 1000;
 const MS_WEEK = 7 * MS_DAY;
 
@@ -110,8 +113,16 @@ function parseKpi(kpiData) {
 
     if (isHeaderRow) {
       const matchedKey = Object.keys(CONTRACTOR_META).find(key => CONTRACTOR_META[key].match(label));
-      currentKey = matchedKey || null; // строка вроде "Строительство магистрали ВОЛС" — сбрасываем контекст
-      if (matchedKey) plans[matchedKey] = toNum(row[1]); // План — из столбца B этой же строки
+      const hasPlan = toNum(row[1]) > 0;
+      if (matchedKey) {
+        currentKey = matchedKey;
+        plans[matchedKey] = toNum(row[1]); // План — из столбца B этой же строки
+      } else if (hasPlan) {
+        currentKey = null; // заголовок другого подрядчика/группы с планом — его участки к нашим не относим
+      }
+      // Пустая по неделям строка БЕЗ плана — это обычный участок, по которому ещё нет выработки
+      // (или пустая строка-разделитель). Контекст подрядчика не сбрасываем, иначе все строки ниже
+      // молча выпали бы из расчёта.
       continue;
     }
 
@@ -140,11 +151,18 @@ function parseKpi(kpiData) {
     const factPipe = weeklySums.reduce((sum, v) => sum + v, 0); // сумма всех недельных значений
     const weeksElapsed = firstActiveIdx === -1 ? 0 : (lastReportedIdx - firstActiveIdx + 1);
     const avgPipe = weeksElapsed > 0 ? factPipe / weeksElapsed : null;
+
+    // Темп за последние недели (до RECENT_WEEKS, но не раньше первой недели работ).
+    // Среднее за весь период тянут вниз стартовые и нулевые недели, поэтому показываем и недавний темп.
+    const recentWeeks = firstActiveIdx === -1 ? 0 : Math.min(RECENT_WEEKS, weeksElapsed);
+    const recentAvg = recentWeeks > 0
+      ? weeklySums.slice(lastReportedIdx - recentWeeks + 1, lastReportedIdx + 1).reduce((t, v) => t + v, 0) / recentWeeks
+      : null;
     const lastWeekEndDate = lastReportedIdx >= 0 ? weekEndDates[lastReportedIdx] : null;
     const planPipe = plans[key]; // План из столбца B — 0/null, если ещё не заполнен в таблице
     const remainingPipe = (planPipe !== null && planPipe > 0) ? Math.max(0, planPipe - factPipe) : null;
 
-    return { factPipe, avgPipe, chartTrend, lastWeekEndDate, planPipe, remainingPipe };
+    return { factPipe, avgPipe, recentAvg, recentWeeks, chartTrend, lastWeekEndDate, planPipe, remainingPipe };
   };
 
   return { favorite: buildContractor('favorite'), tekhno: buildContractor('tekhno') };
@@ -169,18 +187,25 @@ export const ForecastTab = ({ kpiData }) => {
       const p = parsed[key];
       const remainingPipe = p ? p.remainingPipe : null; // теперь План − Факт, живой из DB_KPI
 
-      let forecastDays = null, forecastDateText = null, requiredPace = null;
-      if (p && p.avgPipe && p.avgPipe > 0 && p.lastWeekEndDate && remainingPipe !== null) {
-        const weeksLeft = remainingPipe / p.avgPipe;
-        const daysFromLastReport = Math.round(weeksLeft * 7);
+      // Прогноз окончания при заданном недельном темпе: от даты последнего отчёта + остаток / темп
+      const forecastAt = (pace) => {
+        if (!p || !pace || pace <= 0 || !p.lastWeekEndDate || remainingPipe === null) return { text: null, days: null };
+        const daysFromLastReport = Math.round((remainingPipe / pace) * 7);
         const forecastDate = new Date(p.lastWeekEndDate.getTime() + daysFromLastReport * MS_DAY);
-        forecastDateText = formatDateRu(forecastDate);
-
         // "Осталось ~N дн." считаем от СЕГОДНЯ (а не от даты последнего отчёта) —
         // иначе цифра дней не сходится с разницей "дата окончания − сегодня"
         const todayMidnight = new Date();
         todayMidnight.setHours(0, 0, 0, 0);
-        forecastDays = Math.max(0, Math.round((forecastDate.getTime() - todayMidnight.getTime()) / MS_DAY));
+        return {
+          text: formatDateRu(forecastDate),
+          days: Math.max(0, Math.round((forecastDate.getTime() - todayMidnight.getTime()) / MS_DAY)),
+        };
+      };
+      const main = forecastAt(p ? p.avgPipe : null);
+      const recent = forecastAt(p ? p.recentAvg : null);
+
+      let forecastDays = main.days, forecastDateText = main.text, requiredPace = null;
+      if (p && p.avgPipe && p.avgPipe > 0 && p.lastWeekEndDate && remainingPipe !== null) {
 
         // Сколько нужно делать в неделю, чтобы успеть к TARGET_DATE. Остаток известен
         // на дату последнего отчёта, поэтому и время до цели считаем от неё (как и
@@ -201,6 +226,9 @@ export const ForecastTab = ({ kpiData }) => {
         forecastDays,
         forecastDateText,
         requiredPace,
+        recentAvg: p ? p.recentAvg : null,
+        recentWeeks: p ? p.recentWeeks : 0,
+        forecastRecentText: recent.text,
       };
     });
   }, [parsed]);
@@ -236,6 +264,11 @@ export const ForecastTab = ({ kpiData }) => {
                 <div style={{ fontSize: '18px', fontWeight: 700, color: '#e2e8f0' }}>
                   {fmt(c.avgPipe)} <span style={{ fontSize: '12px', opacity: 0.6 }}>км/нед</span>
                 </div>
+                {c.recentAvg !== null && (
+                  <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>
+                    {`за посл. ${c.recentWeeks} нед.: ${fmt(c.recentAvg)} км/нед`}
+                  </div>
+                )}
               </div>
               <div style={{ borderLeft: '1px solid rgba(255,255,255,0.06)', paddingLeft: '12px' }}>
                 <div style={lbl}>Ср. выработка / нед. для цели</div>
@@ -255,6 +288,11 @@ export const ForecastTab = ({ kpiData }) => {
                 <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>
                   {c.forecastDays !== null ? `осталось ~${c.forecastDays} дн.` : ''}
                 </div>
+                {c.forecastRecentText && (
+                  <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>
+                    {`при темпе посл. ${c.recentWeeks} нед.: ${c.forecastRecentText}`}
+                  </div>
+                )}
               </div>
               <div style={{ borderLeft: '1px solid rgba(255,255,255,0.06)', paddingLeft: '12px' }}>
                 <div style={lbl}>Цель</div>
