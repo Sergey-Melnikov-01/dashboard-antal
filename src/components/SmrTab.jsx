@@ -111,7 +111,7 @@ export const SmrTab = ({
 
   // «Выполнение» (когда участки не выбраны) — два режима:
   //  1) Выбрана конкретная ВЕТКА — ручное значение из листа DB_SMR_PERCENT.
-  //  2) ВЕТКА = «Все» — средневзвешенное по веткам DB_SMR_PERCENT (вес = План км ветки за активную дату).
+  //  2) ВЕТКА = «Все» — НАИБОЛЬШЕЕ значение среди веток DB_SMR_PERCENT (а не среднее).
   // Для выбранных участков % берётся по каждому участку отдельно (см. perSection ниже).
   // Если данных нет — карточка показывает «—».
   const smrPercent = useMemo(() => {
@@ -144,23 +144,14 @@ export const SmrTab = ({
       return getBranchPercent(selectedBranch);
     }
 
-    // «Все» — средневзвешенное по веткам, у которых есть ручное значение
-    let weightedSum = 0;
-    let weightTotal = 0;
+    // «Все» — берём наибольший процент среди веток, у которых есть ручное значение
+    let best = null;
     branches.forEach(b => {
       const pct = getBranchPercent(b);
-      if (pct === null) return;
-      const planSum = allData
-        .filter(r => String(r["Ветка"] || '').trim() === String(b).trim())
-        .filter(r => !activeDate || r["Дата отчета"] === activeDate)
-        .reduce((s, r) => s + toNum(r["План км"]), 0);
-      if (planSum <= 0) return;
-      weightedSum += pct * planSum;
-      weightTotal += planSum;
+      if (pct !== null && (best === null || pct > best)) best = pct;
     });
-
-    return weightTotal > 0 ? weightedSum / weightTotal : null;
-  }, [smrPercentData, selectedBranch, activeDate, branches, allData]);
+    return best;
+  }, [smrPercentData, selectedBranch, activeDate, branches]);
 
   // Карточки КПИ по каждому выбранному участку: объёмы за активную дату + собственный "% вып." участка из DB_SMR
   const perSection = useMemo(() => {
