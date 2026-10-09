@@ -486,12 +486,15 @@ export const SmrTab = ({
       {!hasSel && (() => {
         // Карточка «Факт труба км» появилась только с отчёта от 09.09.2026 — для более ранних
         // дат это поле всегда 0, поэтому карточку показываем, только если есть реальные данные
+        // Синяя ветка: «План общий» = план трубы из DB_METRIC (там сейчас укладывают только трубу).
+        // Остальные ветки и «Все» — как раньше, из DB_SMR.
+        const kpiPlan = (selectedBranch === 'Синяя' && !hasSel && metricBars.pp > 0) ? metricBars.pp : totalPlan;
         const showPipeKpi = totalFactPipe > 0;
         const kpiCount = 2 + (showPipeKpi ? 1 : 0) + (showPercentKpi ? 1 : 0) + (delayKpi ? 1 : 0);
         return (
       <div className="kpi-grid-smr" style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiCount}, 1fr)`, gap: '16px', marginBottom: '16px' }}>
       {[
-        { label: 'План общий', val: totalPlan.toFixed(1), unit: 'км', color: '#2898ff' },
+        { label: 'План общий', val: kpiPlan.toFixed(1), unit: 'км', color: '#2898ff' },
         { label: 'Факт кабель', val: totalFactCable.toFixed(1), unit: 'км', color: '#2de2a6' },
         ...(showPipeKpi ? [{ label: 'Факт труба', val: totalFactPipe.toFixed(1), unit: 'км', color: '#a78bfa' }] : []),
         ...(showPercentKpi ? [{
