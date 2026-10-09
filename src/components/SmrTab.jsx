@@ -306,21 +306,26 @@ export const SmrTab = ({
   // точки истории не нужны на графике, хотя в остальных местах (visibleDates) продолжают участвовать
   const TREND_CHART_START_DATE = '11.06.2026';
 
-  // Итоги План/Факт по кабелю и трубе из DB_METRIC: последний отчёт по каждому участку не позднее активной даты
+  // Итоги План/Факт по кабелю и трубе из DB_METRIC: берём один последний отчёт по каждой ветке
+  // (не позднее активной даты). Участки из старых отчётов не подмешиваем — они могли быть
+  // переименованы/пересобраны и задвоили бы план.
   const metricBars = useMemo(() => {
     const ad = parseDate(activeDate);
-    const latest = {};
-    (metricsData || []).forEach(r => {
-      if (!r || !r["Дата отчета"] || !r["Ветка"]) return;
-      if (selectedBranch !== 'Все' && r["Ветка"] !== selectedBranch) return;
-      if (selectedContractor !== 'Все' && r["Подрядчик"] !== selectedContractor) return;
+    const rows = (metricsData || []).filter(r => {
+      if (!r || !r["Дата отчета"] || !r["Ветка"]) return false;
+      if (selectedBranch !== 'Все' && r["Ветка"] !== selectedBranch) return false;
+      if (selectedContractor !== 'Все' && r["Подрядчик"] !== selectedContractor) return false;
       const d = parseDate(r["Дата отчета"]);
-      if (ad && d > ad) return;
-      const key = r["Ветка"] + '|' + r["Участок"];
-      if (!latest[key] || d > latest[key].d) latest[key] = { d, r };
+      return !(ad && d > ad);
+    });
+    const lastByBranch = {};
+    rows.forEach(r => {
+      const d = parseDate(r["Дата отчета"]);
+      if (!lastByBranch[r["Ветка"]] || d > lastByBranch[r["Ветка"]]) lastByBranch[r["Ветка"]] = d;
     });
     const t = { cp: 0, cf: 0, pp: 0, pf: 0 };
-    Object.values(latest).forEach(({ r }) => {
+    rows.forEach(r => {
+      if (+parseDate(r["Дата отчета"]) !== +lastByBranch[r["Ветка"]]) return;
       t.cp += toNum(r["Кабель План"]); t.cf += toNum(r["Кабель Факт"]);
       t.pp += toNum(r["Труба План"]); t.pf += toNum(r["Труба Факт"]);
     });
