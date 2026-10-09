@@ -270,7 +270,7 @@ export const SmrTab = ({
   const trendData = useMemo(() => {
     if (hasSel) return []; // график скрыт, когда выбраны конкретные участки
     const trendDates = visibleDates.filter(d => parseDate(d) >= parseDate(TREND_CHART_START_DATE));
-    return trendDates.map(date => {
+    const points = trendDates.map(date => {
       const rows = allData.filter(r => {
         if (!r) return false;
         if (r["Дата отчета"] !== date) return false;
@@ -283,7 +283,16 @@ export const SmrTab = ({
       const p = rows.reduce((s, r) => s + toNum(r["План км"]), 0);
       return { date, plan: +p.toFixed(1), fact: +f.toFixed(1), pipe: t > 0 ? +t.toFixed(1) : null, pct: p > 0 ? +(f / p * 100).toFixed(1) : 0 };
     });
+    // График стартует с первой даты, где появились данные (план, кабель или труба) — ведущие нули не показываем
+    const firstIdx = points.findIndex(d => d.plan > 0 || d.fact > 0 || (d.pipe || 0) > 0);
+    return firstIdx === -1 ? points : points.slice(firstIdx);
   }, [visibleDates, allData, selectedBranch, selectedContractor, hasSel]);
+
+  // Какую линию факта рисуем: пока по кабелю нет ни одной ненулевой точки — показываем трубу
+  // (на Синей ветке сейчас укладывают только трубу). Как только появится кабель — график вернётся к кабелю.
+  const trendHasCable = trendData.some(d => d.fact > 0);
+  const trendFactKey = trendHasCable ? 'fact' : (trendData.some(d => d.pipe > 0) ? 'pipe' : 'fact');
+  const trendFactColor = trendFactKey === 'pipe' ? '#a78bfa' : '#2de2a6';
 
   // Динамика по датам для карточек-спидометров СМР (Материалы по НЗС / Материалы / СМР), в тенге.
   // Данные по каждой дате изначально накопительные (снимок "сколько уже
@@ -393,6 +402,8 @@ export const SmrTab = ({
           onChange={v => setSelectedDate(v === 'Все' ? '' : v)}
           onReset=""
         />
+        {/* Фильтр «Графики» (НЗС / Материалы / СМР) скрыт — не удалён */}
+        {false && (
         <PushDropdown
           openDropdown={openDropdown}
           setOpenDropdown={setOpenDropdown}
@@ -403,6 +414,7 @@ export const SmrTab = ({
           onChange={v => setSelectedSmrCharts(v)}
           multi
         />
+        )}
       </div>
 
       {/* KPI Row 1 — Объёмы (когда участки не выбраны) */}
@@ -528,18 +540,16 @@ export const SmrTab = ({
               dot={{ r: 4, fill: '#1c1d26', stroke: '#2898ff', strokeWidth: 2 }}
             />
 
-            {/* Линия Факта (кабель) — с точками на каждой дате */}
+            {/* Линия Факта: кабель; пока кабеля нет совсем — труба (см. trendFactKey) */}
             <Line
               type="monotone"
-              dataKey="fact"
-              stroke="#2de2a6"
+              dataKey={trendFactKey}
+              stroke={trendFactColor}
               strokeWidth={3}
-              dot={{ r: 4, fill: '#2de2a6' }}
+              dot={{ r: 4, fill: trendFactColor }}
               activeDot={{ r: 6 }}
+              connectNulls
             />
-
-            {/* Линия Труба убрана с графика по просьбе — портила читаемость
-                (см. showPipeKpi/totalFactPipe в KPI-карточках выше, там осталась) */}
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -618,7 +628,8 @@ export const SmrTab = ({
       </div>
     </div>
 
-      {['Материалы по НЗС', 'Материалы', 'СМР'].map(cat => (
+      {/* Графики по НЗС / Материалам / СМР скрыты вместе с фильтром «Графики» */}
+      {false && ['Материалы по НЗС', 'Материалы', 'СМР'].map(cat => (
         selectedSmrCharts.includes(cat) && (
           <MetricTrendChart
             key={cat}
