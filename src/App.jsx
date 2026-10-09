@@ -367,6 +367,7 @@ export default function App() {
       {activeTab === 'construction' && (
         <SmrTab
           allData={allData}
+          metricsData={metricsData}
           datesData={datesData}
           smrPercentData={smrPercentData}
           dates={dates}

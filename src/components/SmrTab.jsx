@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
+  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
   LineChart, Line
 } from 'recharts';
 import { parseDate, toNum } from '../utils/format';
@@ -37,8 +37,47 @@ const TrendChartTooltip = ({ active, payload, label }) => {
 };
 
 // Вкладка «СМР»: фильтры, KPI по объёмам, график динамики, спидометры по стоимости, графики план/факт по датам
+
+// Карточка «План / Факт» с двумя вертикальными столбцами (данные DB_METRIC)
+const PlanFactBarsCard = ({ title, plan, fact, factColor, maxValue }) => {
+  const fmt = v => (Math.round(v * 10) / 10).toLocaleString('ru-RU');
+  const data = [{ name: 'План', v: plan, c: '#2898ff' }, { name: 'Факт', v: fact, c: factColor }];
+  return (
+    <div style={card} className="plan-fact-card">
+      <style>{`.plan-fact-card *:focus, .plan-fact-card .recharts-wrapper, .plan-fact-card .recharts-surface, .plan-fact-card .recharts-bar-rectangle { outline: none !important; } .plan-fact-card svg { -webkit-tap-highlight-color: transparent; user-select: none; }`}</style>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <div style={lbl}>{title}</div>
+      </div>
+      {plan > 0 || fact > 0 ? (
+        <ResponsiveContainer width="100%" height={252}>
+          <BarChart data={data} accessibilityLayer={false} margin={{ top: 22, right: 10, left: 10, bottom: 0 }} barCategoryGap="25%">
+            <CartesianGrid strokeDasharray="3 3" stroke="#1d2d24" vertical={false} />
+            <XAxis dataKey="name" stroke="#4b5563" tick={{ fill: '#94a3b8', fontSize: 12 }} tickLine={false} axisLine={false} />
+            <YAxis hide domain={[0, maxValue > 0 ? maxValue : 'auto']} />
+            <Tooltip
+              cursor={false}
+              content={({ active, payload }) => active && payload && payload.length ? (
+                <div style={{ background: '#0f1724', color: '#e2e8f0', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 24px rgba(2,6,23,0.6)', fontSize: 12 }}>
+                  <span style={{ color: payload[0].payload.c, fontWeight: 600 }}>{payload[0].payload.name}: </span>{fmt(payload[0].value)} км
+                </div>
+              ) : null}
+            />
+            <Bar dataKey="v" activeBar={false} isAnimationActive={false} radius={[8, 8, 0, 0]} maxBarSize={70}>
+              {data.map((d, i) => <Cell key={i} fill={d.c} />)}
+              <LabelList dataKey="v" position="top" formatter={fmt} style={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      ) : (
+        <div style={{ height: 252, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 13 }}>Нет данных</div>
+      )}
+    </div>
+  );
+};
+
 export const SmrTab = ({
   allData,
+  metricsData,
   datesData,
   smrPercentData,
   dates,
@@ -266,6 +305,27 @@ export const SmrTab = ({
   // График «Динамика выполнения плана» начинается с этой даты — более ранние (плоские/пустые)
   // точки истории не нужны на графике, хотя в остальных местах (visibleDates) продолжают участвовать
   const TREND_CHART_START_DATE = '11.06.2026';
+
+  // Итоги План/Факт по кабелю и трубе из DB_METRIC: последний отчёт по каждому участку не позднее активной даты
+  const metricBars = useMemo(() => {
+    const ad = parseDate(activeDate);
+    const latest = {};
+    (metricsData || []).forEach(r => {
+      if (!r || !r["Дата отчета"] || !r["Ветка"]) return;
+      if (selectedBranch !== 'Все' && r["Ветка"] !== selectedBranch) return;
+      if (selectedContractor !== 'Все' && r["Подрядчик"] !== selectedContractor) return;
+      const d = parseDate(r["Дата отчета"]);
+      if (ad && d > ad) return;
+      const key = r["Ветка"] + '|' + r["Участок"];
+      if (!latest[key] || d > latest[key].d) latest[key] = { d, r };
+    });
+    const t = { cp: 0, cf: 0, pp: 0, pf: 0 };
+    Object.values(latest).forEach(({ r }) => {
+      t.cp += toNum(r["Кабель План"]); t.cf += toNum(r["Кабель Факт"]);
+      t.pp += toNum(r["Труба План"]); t.pf += toNum(r["Труба Факт"]);
+    });
+    return t;
+  }, [metricsData, selectedBranch, selectedContractor, activeDate]);
 
   const trendData = useMemo(() => {
     if (hasSel) return []; // график скрыт, когда выбраны конкретные участки
@@ -504,13 +564,21 @@ export const SmrTab = ({
       {/* Charts row */}
       <div className="charts-row-smr" style={{
         display: 'grid',
-        gridTemplateColumns: hasSel ? '1fr' : ((nzsPlan > 0 || nzsFact > 0) ? '1fr 2fr' : '1fr 1fr'),
+        gridTemplateColumns: (hasSel || (metricBars.cf <= 0 && metricBars.pf <= 0)) ? '1fr' : ((nzsPlan > 0 || nzsFact > 0) ? '1fr 2fr' : '1fr 1fr'),
         gap: '16px',
         marginBottom: '16px',
         alignItems: 'stretch' }}>
 
-      {/* График динамики */}
-      {!hasSel && (
+      {/* План/Факт (DB_METRIC): кабель и труба */}
+      {!hasSel && (metricBars.cf > 0 || metricBars.pf > 0) && (
+        <div style={{ display: 'grid', gridTemplateColumns: (metricBars.cf > 0 && metricBars.pf > 0) ? '1fr 1fr' : '1fr', gap: '16px' }}>
+          {metricBars.cf > 0 && <PlanFactBarsCard title="Кабель, км" plan={metricBars.cp} fact={metricBars.cf} factColor="#2de2a6" maxValue={Math.max(metricBars.cp, metricBars.cf, metricBars.pp, metricBars.pf)} />}
+          {metricBars.pf > 0 && <PlanFactBarsCard title="Труба, км" plan={metricBars.pp} fact={metricBars.pf} factColor="#a78bfa" maxValue={Math.max(metricBars.cp, metricBars.cf, metricBars.pp, metricBars.pf)} />}
+        </div>
+      )}
+
+      {/* Старый график динамики (скрыт) */}
+      {false && !hasSel && (
       <div style={card}>
         <div style={lbl}>Динамика выполнения плана (км)</div>
         <ResponsiveContainer width="100%" height={252}>
