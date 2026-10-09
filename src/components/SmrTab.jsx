@@ -109,11 +109,10 @@ export const SmrTab = ({
     return { totalFactCable: cable, totalFactPipe: pipe, totalPlan: plan };
   }, [filtered]);
 
-  // «Выполнение» (когда участки не выбраны) — два режима:
-  //  1) Выбрана конкретная ВЕТКА — ручное значение из листа DB_SMR_PERCENT.
-  //  2) ВЕТКА = «Все» — НАИБОЛЬШЕЕ значение среди веток DB_SMR_PERCENT (а не среднее).
+  // «Выполнение» (когда участки не выбраны) — значение из листа DB_SMR_PERCENT для выбранной ветки.
+  // При «Ветка: Все» берётся строка с веткой «Все» (общий процент по всему проекту). Если такой строки
+  // нет — карточка «Выполнение» при «Все» не показывается (см. showPercentKpi), только при выборе конкретной ветки.
   // Для выбранных участков % берётся по каждому участку отдельно (см. perSection ниже).
-  // Если данных нет — карточка показывает «—».
   const smrPercent = useMemo(() => {
     const parseAnyDate = s => {
       if (!s) return new Date(0);
@@ -128,7 +127,8 @@ export const SmrTab = ({
 
     // Последнее (по дате отчёта, не позже activeDate) ручное значение % для конкретной ветки
     const getBranchPercent = (branchName) => {
-      let rows = smrPercentData.filter(r => r["Ветка"] === branchName);
+      const norm = v => String(v || '').trim().toLowerCase(); // пробел в конце названия не мешает
+      let rows = smrPercentData.filter(r => norm(r["Ветка"]) === norm(branchName));
       if (ad) {
         rows = rows.filter(r => parseAnyDate(r["Дата отчета"]) <= ad);
       }
@@ -140,18 +140,11 @@ export const SmrTab = ({
       return raw || raw === 0 ? raw * 100 : null;
     };
 
-    if (selectedBranch !== 'Все') {
-      return getBranchPercent(selectedBranch);
-    }
+    return getBranchPercent(selectedBranch); // для «Все» — строка «Все» из DB_SMR_PERCENT
+  }, [smrPercentData, selectedBranch, activeDate]);
 
-    // «Все» — берём наибольший процент среди веток, у которых есть ручное значение
-    let best = null;
-    branches.forEach(b => {
-      const pct = getBranchPercent(b);
-      if (pct !== null && (best === null || pct > best)) best = pct;
-    });
-    return best;
-  }, [smrPercentData, selectedBranch, activeDate, branches]);
+  // При «Все» без строки «Все» в DB_SMR_PERCENT карточку не показываем (только при выборе конкретной ветки)
+  const showPercentKpi = !(selectedBranch === 'Все' && smrPercent === null);
 
   // Карточки КПИ по каждому выбранному участку: объёмы за активную дату + собственный "% вып." участка из DB_SMR
   const perSection = useMemo(() => {
@@ -417,19 +410,19 @@ export const SmrTab = ({
         // Карточка «Факт труба км» появилась только с отчёта от 09.09.2026 — для более ранних
         // дат это поле всегда 0, поэтому карточку показываем, только если есть реальные данные
         const showPipeKpi = totalFactPipe > 0;
-        const kpiCount = 3 + (showPipeKpi ? 1 : 0) + (delayKpi ? 1 : 0);
+        const kpiCount = 2 + (showPipeKpi ? 1 : 0) + (showPercentKpi ? 1 : 0) + (delayKpi ? 1 : 0);
         return (
       <div className="kpi-grid-smr" style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiCount}, 1fr)`, gap: '16px', marginBottom: '16px' }}>
       {[
         { label: 'План общий', val: totalPlan.toFixed(1), unit: 'км', color: '#2898ff' },
         { label: 'Факт кабель', val: totalFactCable.toFixed(1), unit: 'км', color: '#2de2a6' },
         ...(showPipeKpi ? [{ label: 'Факт труба', val: totalFactPipe.toFixed(1), unit: 'км', color: '#a78bfa' }] : []),
-        {
+        ...(showPercentKpi ? [{
           label: 'Выполнение',
           val: smrPercent === null ? '—' : smrPercent.toFixed(1),
           unit: smrPercent === null ? '' : '%',
           color: smrPercent === null ? '#6b7280' : (smrPercent > 100 ? '#ff4d4d' : '#ff9b45')
-        },
+        }] : []),
       ].map((kpi, i) => (
         <div key={i} style={card}>
           <div style={lbl}>{kpi.label}</div>
