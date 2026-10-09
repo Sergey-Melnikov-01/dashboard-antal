@@ -214,11 +214,11 @@ export const SmrTab = ({
       return new Date(y, m - 1, d);
     };
 
-    // Фильтруем по ветке (trim — убирает пробел в конце)
-    let rows = datesData;
-    if (selectedBranch !== 'Все') {
-      rows = rows.filter(r => String(r["Ветка"] || '').trim() === selectedBranch.trim());
-    }
+    // Берём строки именно выбранной ветки. При «Ветка: Все» — строки с веткой «Все» из DB_DATES
+    // (сводная дата по всем веткам), а не последняя строка любой ветки.
+    // trim и регистр — на случай пробела в конце названия («Зеленая »).
+    const norm = v => String(v || '').trim().toLowerCase();
+    let rows = datesData.filter(r => norm(r["Ветка"]) === norm(selectedBranch));
 
     // Фильтруем по дате: оставляем только строки, где "Дата отчета" <= activeDate
     if (activeDate) {
